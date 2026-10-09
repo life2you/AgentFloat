@@ -77,9 +77,16 @@ AgentFloat
 
 ### 系统要求
 - macOS 15.0 (Sequoia) 或更高版本
-- Swift 6.0+
+- Swift 6.0+（从源码编译时需要）
 
-### 1. 编译与运行
+### 方式一：通过 Homebrew 一键安装 (推荐)
+
+```bash
+brew install --cask life2you/tap/agentfloat
+```
+> 💡 通过 Homebrew Cask 安装后，系统会自动将 `AgentFloat.app` 放入应用程序目录，并在终端注册全局 `agentfloat` 命令行工具。
+
+### 方式二：从源码编译与打包
 
 ```bash
 # 克隆仓库
@@ -99,7 +106,7 @@ make app
 open build/AgentFloat.app
 ```
 
-### 2. 安装全局 CLI 工具
+### 安装全局 CLI 工具 (若从源码编译)
 
 ```bash
 make install-cli

@@ -10,11 +10,14 @@ cd "${ROOT_DIR}"
 
 APP_NAME="AgentFloat"
 BUILD_CONFIG="${1:-release}"
-OUTPUT_DIR="${ROOT_DIR}/build"
+EXECUTABLE_NAME="AgentFloatApp"
+CLI_NAME="agentfloat"
+OUTPUT_DIR="${OUTPUT_DIR:-${ROOT_DIR}/build}"
 APP_BUNDLE="${OUTPUT_DIR}/${APP_NAME}.app"
 
 echo "🔨 正在构建 ${APP_NAME} (${BUILD_CONFIG})..."
 swift build -c "${BUILD_CONFIG}" --product AgentFloatApp
+swift build -c "${BUILD_CONFIG}" --product AgentFloatCLI
 
 BIN_PATH=$(swift build -c "${BUILD_CONFIG}" --show-bin-path)
 
@@ -23,8 +26,11 @@ rm -rf "${APP_BUNDLE}"
 mkdir -p "${APP_BUNDLE}/Contents/MacOS"
 mkdir -p "${APP_BUNDLE}/Contents/Resources"
 
-cp "${BIN_PATH}/AgentFloatApp" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
-chmod +x "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
+cp "${BIN_PATH}/AgentFloatApp" "${APP_BUNDLE}/Contents/MacOS/${EXECUTABLE_NAME}"
+chmod +x "${APP_BUNDLE}/Contents/MacOS/${EXECUTABLE_NAME}"
+
+cp "${BIN_PATH}/AgentFloatCLI" "${APP_BUNDLE}/Contents/MacOS/${CLI_NAME}"
+chmod +x "${APP_BUNDLE}/Contents/MacOS/${CLI_NAME}"
 
 if [ -f "Sources/AgentFloatApp/Resources/Info.plist" ]; then
     cp "Sources/AgentFloatApp/Resources/Info.plist" "${APP_BUNDLE}/Contents/Info.plist"

@@ -73,13 +73,20 @@ AgentFloat
 
 ---
 
-## 🚀 Quick Start & Build
+## 🚀 Installation & Quick Start
 
 ### Requirements
 - macOS 15.0 (Sequoia) or later
-- Swift 6.0+
+- Swift 6.0+ (Only required when compiling from source)
 
-### 1. Build and Run
+### Method 1: Install via Homebrew (Recommended)
+
+```bash
+brew install --cask life2you/tap/agentfloat
+```
+> 💡 Installing via Homebrew Cask places `AgentFloat.app` into `/Applications` and automatically links the `agentfloat` command-line utility into your PATH.
+
+### Method 2: Build from Source
 
 ```bash
 # Clone and enter directory
@@ -99,7 +106,7 @@ The packaged application will be generated at `build/AgentFloat.app`. Launch it 
 open build/AgentFloat.app
 ```
 
-### 2. Install CLI Tool
+### Install CLI Tool (If building from source)
 
 ```bash
 make install-cli

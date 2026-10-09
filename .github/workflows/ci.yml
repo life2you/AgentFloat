@@ -30,6 +30,7 @@ jobs:
 
       - name: Verify Bundle Integrity
         run: |
-          test -f build/AgentFloat.app/Contents/MacOS/AgentFloat
+          test -f build/AgentFloat.app/Contents/MacOS/AgentFloatApp
+          test -f build/AgentFloat.app/Contents/MacOS/agentfloat
           test -f build/AgentFloat.app/Contents/Info.plist
           echo "Bundle verified successfully"
