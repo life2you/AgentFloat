@@ -163,7 +163,12 @@ private struct UltraCompactTaskRow: View {
                 // 按钮组直接内置于行内右侧
                 HStack(spacing: 4) {
                     Button(action: {
-                        _ = TerminalLauncher.activate(cwd: task.cwd, preferredApp: task.terminalApp)
+                        _ = TerminalLauncher.activate(
+                            cwd: task.cwd,
+                            preferredApp: task.terminalApp,
+                            sessionId: task.sessionId,
+                            source: task.source
+                        )
                     }) {
                         HStack(spacing: 2) {
                             Image(systemName: "terminal")

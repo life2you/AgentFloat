@@ -234,7 +234,12 @@ public struct MenuBarView: View {
                 .foregroundColor(.accentColor)
                 
                 Button("终端") {
-                    TerminalLauncher.activate(cwd: task.cwd, preferredApp: task.terminalApp)
+                    TerminalLauncher.activate(
+                        cwd: task.cwd,
+                        preferredApp: task.terminalApp,
+                        sessionId: task.sessionId,
+                        source: task.source
+                    )
                 }
                 .buttonStyle(.borderless)
                 .font(.system(size: 11))

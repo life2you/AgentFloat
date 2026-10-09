@@ -78,6 +78,21 @@ function extractPrompt(messages: any[]): string | undefined {
   return undefined;
 }
 
+function sessionIdFor(ctx: any): string {
+  try {
+    const file = ctx && ctx.sessionManager && ctx.sessionManager.getSessionFile
+      ? ctx.sessionManager.getSessionFile()
+      : null;
+    if (file) return path.basename(String(file)).replace(/\.jsonl$/, "");
+  } catch {}
+  try {
+    if (ctx && ctx.sessionManager && ctx.sessionManager.getSessionId) {
+      return ctx.sessionManager.getSessionId();
+    }
+  } catch {}
+  return `pid-${process.pid}`;
+}
+
 export function setupAgentFloatExtension(pi: any) {
   const serverUrl = process.env.AGENTFLOAT_URL || 'http://127.0.0.1:41920';
   let sessionStartTime = Date.now();
@@ -111,9 +126,7 @@ export function setupAgentFloatExtension(pi: any) {
     const now = Date.now();
     const durationMs = Math.max(0, now - sessionStartTime);
 
-    const sessionId = (typeof ctx?.sessionManager?.getSessionId === 'function')
-      ? ctx.sessionManager.getSessionId()
-      : `pi-${process.pid}`;
+    const sessionId = sessionIdFor(ctx);
 
     // 基于时间和 prompt 生成防抖 turn 唯一标识
     const turnKey = `${sessionId}-${Math.floor(now / 3000)}`;
