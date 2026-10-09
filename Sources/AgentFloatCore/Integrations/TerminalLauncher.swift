@@ -61,27 +61,34 @@ public struct TerminalLauncher: Sendable {
     @discardableResult
     public static func activate(cwd: String?, preferredApp: String? = nil) -> Bool {
         let target = detectActiveTerminal(preferred: preferredApp)
+        let bundleId = target.rawValue
         
-        // 1. 若该终端正在运行，直接激活其当前窗口，保留在原有会话与 Tab，绝不打开新窗口或新 Tab
-        if let runningApp = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == target.rawValue }) {
-            if #available(macOS 14.0, *) {
-                runningApp.activate()
+        // 1. 优先通过系统级 /usr/bin/open -b 激活目标终端窗口（保证置顶，绝不打开新 Tab）
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        process.arguments = ["-b", bundleId]
+        if (try? process.run()) != nil {
+            process.waitUntilExit()
+            if process.terminationStatus == 0 {
                 return true
-            } else {
-                if runningApp.activate(options: [.activateIgnoringOtherApps]) {
-                    return true
-                }
             }
         }
         
-        // 2. 尝试使用 AppleScript 唤起既有会话
-        let script = "tell application id \"\(target.rawValue)\" to activate"
+        // 2. 通过 AppleScript 唤起既有终端应用窗口
+        let script = "tell application id \"\(bundleId)\" to activate"
         if runAppleScript(script) {
             return true
         }
         
-        // 3. 若终端尚未运行，则启动该终端
-        return activateBundle(target.rawValue)
+        // 3. 备用方式：通过 NSWorkspace 启动或激活
+        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) {
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = true
+            NSWorkspace.shared.openApplication(at: appURL, configuration: config, completionHandler: nil)
+            return true
+        }
+        
+        return false
     }
     
     private static func openAppleTerminal(cwd: String?) -> Bool {

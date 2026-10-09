@@ -163,17 +163,18 @@ private struct UltraCompactTaskRow: View {
                 // 按钮组直接内置于行内右侧
                 HStack(spacing: 4) {
                     Button(action: {
-                        TerminalLauncher.activate(cwd: task.cwd, preferredApp: task.terminalApp)
+                        _ = TerminalLauncher.activate(cwd: task.cwd, preferredApp: task.terminalApp)
                     }) {
                         HStack(spacing: 2) {
                             Image(systemName: "terminal")
                             Text("终端")
                         }
-                        .font(.system(size: 9, weight: .medium))
-                        .padding(.vertical, 2)
-                        .padding(.horizontal, 5)
-                        .background(Color.secondary.opacity(0.15))
-                        .cornerRadius(3)
+                        .font(.system(size: 9.5, weight: .medium))
+                        .padding(.vertical, 3)
+                        .padding(.horizontal, 6)
+                        .background(Color.secondary.opacity(0.18))
+                        .cornerRadius(4)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .help("激活当前终端窗口")
@@ -187,12 +188,13 @@ private struct UltraCompactTaskRow: View {
                             Image(systemName: "checkmark")
                             Text("已处理")
                         }
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.system(size: 9.5, weight: .bold))
                         .foregroundColor(.white)
-                        .padding(.vertical, 2)
-                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .padding(.horizontal, 7)
                         .background(themeColor)
-                        .cornerRadius(3)
+                        .cornerRadius(4)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .help("标记为已处理")
@@ -203,9 +205,10 @@ private struct UltraCompactTaskRow: View {
                         }
                     }) {
                         Image(systemName: "xmark")
-                            .font(.system(size: 8, weight: .medium))
+                            .font(.system(size: 9, weight: .semibold))
                             .foregroundColor(.secondary)
-                            .padding(2)
+                            .padding(3)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .help("隐藏此项卡片")

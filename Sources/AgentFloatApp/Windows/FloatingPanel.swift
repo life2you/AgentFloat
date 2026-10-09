@@ -32,6 +32,14 @@ public final class FloatingPanel: NSPanel {
         self.contentView = hosting
     }
     
+    override public var canBecomeKey: Bool {
+        return true
+    }
+    
+    override public var canBecomeMain: Bool {
+        return false
+    }
+    
     public func updateVisibility() {
         if taskManager.undismissedTasks.isEmpty {
             self.orderOut(nil)
