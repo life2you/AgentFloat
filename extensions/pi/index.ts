@@ -5,7 +5,7 @@ import * as os from 'os';
 /**
  * Pi Agent Extension for AgentFloat
  * 兼容 Pi 官方扩展接口 (export default function(pi))
- * 监听 Pi 生命周期事件，将完成/异常/中止状态上报至 AgentFloat 悬浮窗。
+ * 监听 Pi 生命周期事件，在任务结束/异常/中止时上报至 AgentFloat 悬浮窗。
  */
 
 export interface AgentFloatEventPayload {
@@ -62,27 +62,40 @@ function truncate(str: string, maxLen: number): string {
   return trimmed.slice(0, maxLen - 3) + '...';
 }
 
+function extractPrompt(messages: any[]): string | undefined {
+  if (!Array.isArray(messages)) return undefined;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg?.role === 'user') {
+      const content = msg.content;
+      if (typeof content === 'string') return content;
+      if (Array.isArray(content)) {
+        const textItem = content.find((c: any) => c.type === 'text');
+        if (textItem?.text) return textItem.text;
+      }
+    }
+  }
+  return undefined;
+}
+
 export function setupAgentFloatExtension(pi: any) {
   const serverUrl = process.env.AGENTFLOAT_URL || 'http://127.0.0.1:41920';
   let sessionStartTime = Date.now();
   let lastPrompt: string | undefined = undefined;
+  let reportedTurns = new Set<string>();
 
   if (!pi || typeof pi.on !== 'function') return;
 
-  // 记录提示词
-  pi.on('before_agent_start', (event: any, ctx: any) => {
-    sessionStartTime = Date.now();
-    if (event?.systemPrompt) {
-      // 保留状态
-    }
-  });
-
-  pi.on('agent_start', (event: any, ctx: any) => {
+  pi.on('before_agent_start', (_event: any, _ctx: any) => {
     sessionStartTime = Date.now();
   });
 
-  // 提取用户最新提问
-  pi.on('message_end', (event: any, ctx: any) => {
+  pi.on('agent_start', (_event: any, _ctx: any) => {
+    sessionStartTime = Date.now();
+  });
+
+  // 记录用户最新提示词
+  pi.on('message_end', (event: any, _ctx: any) => {
     if (event?.message?.role === 'user') {
       const content = event.message.content;
       if (typeof content === 'string') {
@@ -94,53 +107,61 @@ export function setupAgentFloatExtension(pi: any) {
     }
   });
 
-  // 监听 Agent 结束及最终结算状态
-  pi.on('agent_settled', async (event: any, ctx: any) => {
-    const durationMs = Math.max(0, Date.now() - sessionStartTime);
-    const isAborted = Boolean(event?.aborted);
+  const handleTurnFinish = async (isAborted: boolean, ctx: any, sourceEvent: string) => {
+    const now = Date.now();
+    const durationMs = Math.max(0, now - sessionStartTime);
 
     const sessionId = (typeof ctx?.sessionManager?.getSessionId === 'function')
       ? ctx.sessionManager.getSessionId()
-      : `pi-session-${Date.now()}`;
+      : `pi-${process.pid}`;
 
-    const turnId = `turn-${Date.now()}`;
-    const cwd = ctx?.cwd || process.cwd();
-
-    let status: 'completed' | 'error' | 'aborted' = 'completed';
-    let errorMessage: string | undefined = undefined;
-
-    if (isAborted) {
-      status = 'aborted';
+    // 基于时间和 prompt 生成防抖 turn 唯一标识
+    const turnKey = `${sessionId}-${Math.floor(now / 3000)}`;
+    if (reportedTurns.has(turnKey)) {
+      return;
     }
+    reportedTurns.add(turnKey);
 
-    const title = lastPrompt ? `Pi: ${truncate(lastPrompt, 35)}` : 'Pi Agent 任务结束';
+    const cwd = ctx?.cwd || process.cwd();
+    const prompt = lastPrompt || extractPrompt(ctx?.sessionManager?.getBranch?.() || []);
+    const title = prompt ? `Pi: ${truncate(prompt, 35)}` : 'Pi Agent 任务完成';
+
+    const status: 'completed' | 'aborted' = isAborted ? 'aborted' : 'completed';
 
     const payload: AgentFloatEventPayload = {
       source: 'pi',
       sessionId,
-      turnId,
+      turnId: `turn-${now}`,
       title,
-      promptSummary: lastPrompt ? truncate(lastPrompt, 120) : undefined,
-      resultSummary: isAborted ? '用户中止执行' : '执行完成',
+      promptSummary: prompt ? truncate(prompt, 120) : undefined,
+      resultSummary: isAborted ? '用户中止当前任务' : '执行完成，请核对代码变动',
       status,
-      errorMessage,
+      errorMessage: undefined,
       cwd,
       durationMs,
       metadata: {
         agent: 'pi',
+        event: sourceEvent,
       },
     };
 
     await sendToAgentFloat(payload, serverUrl);
+  };
+
+  // 监听 agent_end 和 agent_settled 双重保险
+  pi.on('agent_end', async (_event: any, ctx: any) => {
+    await handleTurnFinish(false, ctx, 'agent_end');
+  });
+
+  pi.on('agent_settled', async (event: any, ctx: any) => {
+    await handleTurnFinish(Boolean(event?.aborted), ctx, 'agent_settled');
   });
 }
 
-// 兼容官方扩展导出格式: export default function(pi: ExtensionAPI)
 export default function (pi: any) {
   setupAgentFloatExtension(pi);
 }
 
-// 兼容 activate(context) 导出格式
 export function activate(context: any) {
   setupAgentFloatExtension(context);
 }
