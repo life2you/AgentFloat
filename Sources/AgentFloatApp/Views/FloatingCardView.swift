@@ -10,7 +10,6 @@ public struct FloatingCardView: View {
         self.previewTask = previewTask
     }
     
-    /// 兼容老接口
     public init(task: AgentTask, taskManager: TaskManager) {
         self.taskManager = taskManager
         self.previewTask = task
@@ -25,19 +24,19 @@ public struct FloatingCardView: View {
     
     public var body: some View {
         VStack(spacing: 0) {
-            // 顶栏：多任务聚合标识与全局快捷动作
-            HStack(spacing: 8) {
-                HStack(spacing: 6) {
+            // 超紧凑顶栏
+            HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     Image(systemName: "macwindow.on.rectangle")
                         .foregroundColor(.accentColor)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 11, weight: .semibold))
                     Text("待核对任务")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: 11, weight: .bold))
                     
                     Text("\(tasksToDisplay.count)")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 6)
+                        .padding(.horizontal, 5)
                         .padding(.vertical, 1)
                         .background(Color.accentColor)
                         .clipShape(Capsule())
@@ -59,67 +58,66 @@ public struct FloatingCardView: View {
                     .help("标记列表中所有任务为已处理")
                 }
                 
-                // 关闭整个悬浮窗（不标记为已处理）
                 Button(action: {
                     Task {
                         try? await taskManager.dismissAllCards()
                     }
                 }) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: 9, weight: .semibold))
                         .foregroundColor(.secondary)
-                        .padding(4)
-                        .background(Color.secondary.opacity(0.15))
+                        .padding(3)
+                        .background(Color.secondary.opacity(0.12))
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .help("关闭全部卡片 (保留在待处理列表中)")
+                .help("关闭全部卡片 (保留在菜单栏待办中)")
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
-            .padding(.bottom, 8)
+            .padding(.horizontal, 10)
+            .padding(.top, 7)
+            .padding(.bottom, 6)
             
             Divider()
-                .opacity(0.6)
+                .opacity(0.5)
             
-            // 列表内容：紧凑卡片排布
+            // 列表内容
             if tasksToDisplay.isEmpty {
                 VStack(spacing: 4) {
                     Text("暂无待核对任务")
-                        .font(.system(size: 11))
+                        .font(.system(size: 10))
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
+                .padding(.vertical, 12)
             } else {
                 ScrollView(.vertical, showsIndicators: tasksToDisplay.count > 3) {
-                    LazyVStack(spacing: 8) {
+                    LazyVStack(spacing: 5) {
                         ForEach(tasksToDisplay) { item in
-                            CompactTaskRow(task: item, taskManager: taskManager)
-                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                            UltraCompactTaskRow(task: item, taskManager: taskManager)
+                                .transition(.opacity.combined(with: .scale(scale: 0.98)))
                         }
                     }
-                    .padding(10)
+                    .padding(6)
                 }
-                .frame(maxHeight: 400)
+                .frame(maxHeight: 360)
             }
         }
-        .frame(width: 390)
+        .frame(width: 350)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 10)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: 10)
                         .stroke(Color.primary.opacity(0.12), lineWidth: 1)
                 )
         )
-        .shadow(color: Color.black.opacity(0.22), radius: 12, x: 0, y: 5)
-        .animation(.easeInOut(duration: 0.2), value: tasksToDisplay)
+        .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 4)
+        .animation(.easeInOut(duration: 0.18), value: tasksToDisplay)
     }
 }
 
-/// 紧凑任务单条卡片
-private struct CompactTaskRow: View {
+/// 超紧凑单项任务条目
+private struct UltraCompactTaskRow: View {
     let task: AgentTask
     let taskManager: TaskManager
     
@@ -134,153 +132,135 @@ private struct CompactTaskRow: View {
         }
     }
     
-    private var statusIcon: String {
-        switch task.status {
-        case .completed:
-            return "checkmark.circle.fill"
-        case .error:
-            return "xmark.octagon.fill"
-        case .aborted:
-            return "stop.circle.fill"
-        case .unknown:
-            return "questionmark.circle.fill"
-        }
-    }
-    
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // 第 1 行：状态 + 来源 + 耗时 + 单项关闭
-            HStack(spacing: 6) {
-                Image(systemName: statusIcon)
-                    .foregroundColor(themeColor)
-                    .font(.system(size: 11, weight: .bold))
-                
-                Text(task.status.displayName)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(themeColor)
+        VStack(alignment: .leading, spacing: 3) {
+            // 第 1 行：状态点 + 来源 + 标题 + 快捷操作
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(themeColor)
+                    .frame(width: 6, height: 6)
                 
                 Text(task.typedSource.displayName)
-                    .font(.system(size: 9, weight: .medium))
-                    .padding(.horizontal, 5)
+                    .font(.system(size: 8, weight: .bold))
+                    .padding(.horizontal, 4)
                     .padding(.vertical, 1)
                     .background(Color.secondary.opacity(0.15))
                     .cornerRadius(3)
                 
-                if let duration = task.durationMs {
-                    Text("\(Double(duration) / 1000.0, specifier: "%.1f")s")
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-                
-                // 单项关闭卡片
-                Button(action: {
-                    Task {
-                        try? await taskManager.dismissCard(id: task.id)
-                    }
-                }) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(.secondary)
-                        .padding(2)
-                }
-                .buttonStyle(.plain)
-                .help("关闭此项卡片 (不标记为已处理)")
-            }
-            
-            // 第 2 行：醒目核心提示（紧凑横幅）
-            HStack(spacing: 5) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(themeColor)
-                    .font(.system(size: 10))
-                Text(task.verificationNotice)
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(themeColor)
-                Spacer()
-            }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(themeColor.opacity(0.1))
-            .cornerRadius(4)
-            
-            // 第 3 行：标题与工作目录
-            VStack(alignment: .leading, spacing: 2) {
                 Text(task.title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.primary)
                     .lineLimit(1)
                 
+                if let duration = task.durationMs {
+                    Text("\(Double(duration) / 1000.0, specifier: "%.1f")s")
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer(minLength: 4)
+                
+                // 按钮组直接内置于行内右侧
+                HStack(spacing: 4) {
+                    Button(action: {
+                        TerminalLauncher.activate(cwd: task.cwd, preferredApp: task.terminalApp)
+                    }) {
+                        HStack(spacing: 2) {
+                            Image(systemName: "terminal")
+                            Text("终端")
+                        }
+                        .font(.system(size: 9, weight: .medium))
+                        .padding(.vertical, 2)
+                        .padding(.horizontal, 5)
+                        .background(Color.secondary.opacity(0.15))
+                        .cornerRadius(3)
+                    }
+                    .buttonStyle(.plain)
+                    .help("激活当前终端窗口")
+                    
+                    Button(action: {
+                        Task {
+                            try? await taskManager.resolveTask(id: task.id)
+                        }
+                    }) {
+                        HStack(spacing: 2) {
+                            Image(systemName: "checkmark")
+                            Text("已处理")
+                        }
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.vertical, 2)
+                        .padding(.horizontal, 6)
+                        .background(themeColor)
+                        .cornerRadius(3)
+                    }
+                    .buttonStyle(.plain)
+                    .help("标记为已处理")
+                    
+                    Button(action: {
+                        Task {
+                            try? await taskManager.dismissCard(id: task.id)
+                        }
+                    }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 8, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .padding(2)
+                    }
+                    .buttonStyle(.plain)
+                    .help("隐藏此项卡片")
+                }
+            }
+            
+            // 第 2 行：核心警告提示 + 工作目录
+            HStack(spacing: 5) {
+                HStack(spacing: 3) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 8))
+                    Text(task.verificationNotice)
+                        .font(.system(size: 9, weight: .bold))
+                }
+                .foregroundColor(themeColor)
+                
                 if let cwd = task.cwd {
-                    HStack(spacing: 4) {
+                    Text("•")
+                        .font(.system(size: 7))
+                        .foregroundColor(.secondary.opacity(0.4))
+                    
+                    HStack(spacing: 2) {
                         Image(systemName: "folder")
-                            .font(.system(size: 9))
+                            .font(.system(size: 7))
                         Text(cwd)
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(.system(size: 8, design: .monospaced))
                             .lineLimit(1)
                             .truncationMode(.middle)
                     }
                     .foregroundColor(.secondary)
                 }
-            }
-            
-            // 第 4 行：输出或摘要（如果存在）
-            if let result = task.resultSummary ?? task.errorMessage ?? task.promptSummary {
-                Text(result)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-                    .lineLimit(2)
-                    .padding(5)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(NSColor.textBackgroundColor).opacity(0.35))
-                    .cornerRadius(4)
-            }
-            
-            // 第 5 行：紧凑操作按钮
-            HStack(spacing: 8) {
+                
                 Spacer()
-                
-                Button(action: {
-                    TerminalLauncher.activate(cwd: task.cwd, preferredApp: task.terminalApp)
-                }) {
-                    HStack(spacing: 3) {
-                        Image(systemName: "terminal.fill")
-                        Text("查看终端")
-                    }
-                    .font(.system(size: 10, weight: .medium))
-                    .padding(.vertical, 3)
-                    .padding(.horizontal, 8)
-                    .background(Color.secondary.opacity(0.15))
-                    .cornerRadius(4)
-                }
-                .buttonStyle(.plain)
-                
-                Button(action: {
-                    Task {
-                        try? await taskManager.resolveTask(id: task.id)
-                    }
-                }) {
-                    HStack(spacing: 3) {
-                        Image(systemName: "checkmark")
-                        Text("已处理")
-                    }
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.vertical, 3)
-                    .padding(.horizontal, 10)
-                    .background(themeColor)
-                    .cornerRadius(4)
-                }
-                .buttonStyle(.plain)
+            }
+            
+            // 第 3 行（如有摘要或报错，紧凑单行展示）
+            if let result = task.errorMessage ?? task.resultSummary ?? task.promptSummary {
+                Text(result)
+                    .font(.system(size: 8.5))
+                    .foregroundColor(task.status == .error ? Color.red.opacity(0.9) : .secondary)
+                    .lineLimit(1)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(Color(NSColor.textBackgroundColor).opacity(0.25))
+                    .cornerRadius(3)
             }
         }
-        .padding(9)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 5)
         .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(NSColor.controlBackgroundColor).opacity(0.5))
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color(NSColor.controlBackgroundColor).opacity(0.4))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(themeColor.opacity(0.35), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(themeColor.opacity(0.3), lineWidth: 1)
                 )
         )
     }

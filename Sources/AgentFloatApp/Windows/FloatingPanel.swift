@@ -40,8 +40,8 @@ public final class FloatingPanel: NSPanel {
         
         guard let hosting = self.hostingView else { return }
         let fittingSize = hosting.fittingSize
-        let finalWidth: CGFloat = 390
-        let finalHeight = min(max(fittingSize.height, 120), 480)
+        let finalWidth: CGFloat = 350
+        let finalHeight = min(max(fittingSize.height, 90), 420)
         
         if !hasCustomPosition {
             positionAtTopRight(width: finalWidth, height: finalHeight)

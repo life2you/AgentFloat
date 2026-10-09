@@ -57,21 +57,31 @@ public struct TerminalLauncher: Sendable {
         return NSWorkspace.shared.urlForApplication(withBundleIdentifier: terminal.rawValue) != nil
     }
     
-    /// 激活终端并尽可能跳转至目标工作目录
+    /// 激活终端：优先置顶并激活用户当前已有的终端窗口/会话，避免打开多余的新 Tab 页
     @discardableResult
     public static func activate(cwd: String?, preferredApp: String? = nil) -> Bool {
         let target = detectActiveTerminal(preferred: preferredApp)
         
-        switch target {
-        case .terminal:
-            return openAppleTerminal(cwd: cwd)
-        case .iterm2:
-            return openITerm2(cwd: cwd)
-        case .ghostty:
-            return openBundleWithCwd(bundleId: target.rawValue, cwd: cwd)
-        case .otty:
-            return openBundleWithCwd(bundleId: target.rawValue, cwd: cwd)
+        // 1. 若该终端正在运行，直接激活其当前窗口，保留在原有会话与 Tab，绝不打开新窗口或新 Tab
+        if let runningApp = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == target.rawValue }) {
+            if #available(macOS 14.0, *) {
+                runningApp.activate()
+                return true
+            } else {
+                if runningApp.activate(options: [.activateIgnoringOtherApps]) {
+                    return true
+                }
+            }
         }
+        
+        // 2. 尝试使用 AppleScript 唤起既有会话
+        let script = "tell application id \"\(target.rawValue)\" to activate"
+        if runAppleScript(script) {
+            return true
+        }
+        
+        // 3. 若终端尚未运行，则启动该终端
+        return activateBundle(target.rawValue)
     }
     
     private static func openAppleTerminal(cwd: String?) -> Bool {
