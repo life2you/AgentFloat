@@ -113,6 +113,16 @@ cask "$CASK_TOKEN" do
   app "$APP_NAME.app"
   binary "#{appdir}/$APP_NAME.app/Contents/MacOS/agentfloat"
 
+  postflight do
+    system_command "xattr",
+                   args: ["-cr", "#{appdir}/$APP_NAME.app"]
+  end
+
+  caveats <<~EOS
+    若首次启动遇到 macOS 安全提示，可在终端运行：
+      xattr -cr /Applications/$APP_NAME.app
+  EOS
+
   zap trash: [
     "~/.agentfloat",
     "~/Library/Preferences/com.agentfloat.AgentFloatApp.plist",
