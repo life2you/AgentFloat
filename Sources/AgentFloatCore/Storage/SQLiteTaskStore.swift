@@ -335,6 +335,22 @@ public actor SQLiteTaskStore {
         }
     }
     
+    /// 隐藏所有未处理任务的悬浮卡片 (仅关闭弹窗，不标记为已处理)
+    public func markAllCardsDismissed() throws {
+        guard let db = db else { throw TaskStoreError.databaseOpenFailed("数据库未连接") }
+        let sql = "UPDATE tasks SET dismissed_card = 1, updated_at = ? WHERE is_resolved = 0 AND dismissed_card = 0;"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            throw TaskStoreError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+        defer { sqlite3_finalize(stmt) }
+        
+        sqlite3_bind_double(stmt, 1, Date().timeIntervalSince1970)
+        guard sqlite3_step(stmt) == SQLITE_DONE else {
+            throw TaskStoreError.executionFailed(String(cString: sqlite3_errmsg(db)))
+        }
+    }
+    
     /// 标记所有待处理任务为已处理
     public func markAllResolved() throws {
         guard let db = db else { throw TaskStoreError.databaseOpenFailed("数据库未连接") }

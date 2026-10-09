@@ -28,17 +28,21 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             self.taskManager = manager
             
             // 初始化悬浮卡片面板
-            self.floatingPanel = FloatingPanel()
+            let panel = FloatingPanel(taskManager: manager)
+            self.floatingPanel = panel
             
-            // 绑定悬浮卡片展示联动
-            manager.onCardTaskChanged = { [weak self] task in
+            // 绑定悬浮卡片展示联动（多任务聚合列表）
+            manager.onTasksChanged = { [weak self] _ in
                 guard let self = self else { return }
                 DispatchQueue.main.async {
-                    if let task = task {
-                        self.floatingPanel.showCard(task: task, taskManager: manager)
-                    } else {
-                        self.floatingPanel.hideCard()
-                    }
+                    self.floatingPanel.updateVisibility()
+                }
+            }
+            
+            manager.onCardTaskChanged = { [weak self] _ in
+                guard let self = self else { return }
+                DispatchQueue.main.async {
+                    self.floatingPanel.updateVisibility()
                 }
             }
             

@@ -4,10 +4,13 @@ import AgentFloatCore
 
 public final class FloatingPanel: NSPanel {
     private var hasCustomPosition = false
+    public let taskManager: TaskManager
+    private var hostingView: NSHostingView<FloatingCardView>?
     
-    public init() {
+    public init(taskManager: TaskManager) {
+        self.taskManager = taskManager
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 380, height: 220),
+            contentRect: NSRect(x: 0, y: 0, width: 390, height: 200),
             styleMask: [.nonactivatingPanel, .fullSizeContentView, .borderless],
             backing: .buffered,
             defer: false
@@ -21,18 +24,24 @@ public final class FloatingPanel: NSPanel {
         self.hasShadow = true
         self.isMovableByWindowBackground = true
         self.hidesOnDeactivate = false
+        
+        let cardView = FloatingCardView(taskManager: taskManager)
+        let hosting = NSHostingView(rootView: cardView)
+        hosting.translatesAutoresizingMaskIntoConstraints = false
+        self.hostingView = hosting
+        self.contentView = hosting
     }
     
-    public func showCard(task: AgentTask, taskManager: TaskManager) {
-        let cardView = FloatingCardView(task: task, taskManager: taskManager)
-        let hostingView = NSHostingView(rootView: cardView)
-        hostingView.translatesAutoresizingMaskIntoConstraints = false
+    public func updateVisibility() {
+        if taskManager.undismissedTasks.isEmpty {
+            self.orderOut(nil)
+            return
+        }
         
-        self.contentView = hostingView
-        
-        let fittingSize = hostingView.fittingSize
-        let finalWidth: CGFloat = 380
-        let finalHeight = max(fittingSize.height, 180)
+        guard let hosting = self.hostingView else { return }
+        let fittingSize = hosting.fittingSize
+        let finalWidth: CGFloat = 390
+        let finalHeight = min(max(fittingSize.height, 120), 480)
         
         if !hasCustomPosition {
             positionAtTopRight(width: finalWidth, height: finalHeight)
@@ -42,6 +51,10 @@ public final class FloatingPanel: NSPanel {
         }
         
         self.orderFrontRegardless()
+    }
+    
+    public func showCard(task: AgentTask, taskManager: TaskManager) {
+        updateVisibility()
     }
     
     public func hideCard() {

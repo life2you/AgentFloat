@@ -105,11 +105,17 @@ public final class TaskManager: ObservableObject {
     /// 当前悬浮卡片展示的任务 (未隐藏且未处理的第一项)
     @Published public private(set) var currentCardTask: AgentTask? = nil
     
+    /// 尚未隐藏卡片的未处理任务列表 (is_resolved == 0 AND dismissed_card == 0)
+    @Published public private(set) var undismissedTasks: [AgentTask] = []
+    
     /// 历史记录
     @Published public private(set) var recentHistory: [AgentTask] = []
     
-    /// 卡片任务变更回调（便于窗口管理层监听到新任务展示或隐藏）
+    /// 卡片任务变更回调（单任务兼容）
     public var onCardTaskChanged: ((AgentTask?) -> Void)?
+    
+    /// 聚合任务列表变更回调（多任务聚合卡片使用）
+    public var onTasksChanged: (([AgentTask]) -> Void)?
     
     public init(store: SQLiteTaskStore) {
         self.store = store
@@ -123,6 +129,7 @@ public final class TaskManager: ObservableObject {
             let history = try await store.getHistory(limit: 30)
             
             self.pendingTasks = pending
+            self.undismissedTasks = undismissed
             self.recentHistory = history
             
             let nextCard = undismissed.first
@@ -130,6 +137,7 @@ public final class TaskManager: ObservableObject {
                 self.currentCardTask = nextCard
                 self.onCardTaskChanged?(nextCard)
             }
+            self.onTasksChanged?(undismissed)
         } catch {
             print("[TaskManager] 加载任务失败: \(error)")
         }
@@ -251,6 +259,12 @@ public final class TaskManager: ObservableObject {
     public func dismissCurrentCard() async throws {
         guard let current = currentCardTask else { return }
         try await dismissCard(id: current.id)
+    }
+    
+    /// 隐藏所有待处理任务的悬浮卡片 (仅关闭悬浮窗，不标记为已处理)
+    public func dismissAllCards() async throws {
+        try await store.markAllCardsDismissed()
+        await loadTasks()
     }
     
     /// 重新在卡片中展示指定待处理任务
