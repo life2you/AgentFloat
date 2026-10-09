@@ -1,0 +1,24 @@
+# Swift / Xcode / SPM
+.build/
+build/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+.swiftpm/
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# Local Environment & Secrets
+.env
+auth_token
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Node / Extension artifacts
+node_modules/
+dist/
+*.log

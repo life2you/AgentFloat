@@ -1,0 +1,12 @@
+{
+  "name": "agentfloat-pi-extension",
+  "version": "1.0.0",
+  "description": "Pi Agent Extension for AgentFloat desktop notifications",
+  "main": "index.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": ["agentfloat", "pi", "ai-agent", "notifications"],
+  "author": "AgentFloat Contributors",
+  "license": "MIT"
+}

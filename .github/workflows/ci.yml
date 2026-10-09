@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Select Xcode / Swift Version
+        run: |
+          swift --version
+          sw_vers
+
+      - name: Build Debug Targets
+        run: swift build
+
+      - name: Run Unit Tests
+        run: swift test --disable-xctest
+
+      - name: Build Release App Bundle
+        run: ./scripts/build-app.sh release
+
+      - name: Verify Bundle Integrity
+        run: |
+          test -f build/AgentFloat.app/Contents/MacOS/AgentFloat
+          test -f build/AgentFloat.app/Contents/Info.plist
+          echo "Bundle verified successfully"
