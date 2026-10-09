@@ -151,6 +151,7 @@ export function setupAgentFloatExtension(pi: any) {
       status,
       errorMessage: undefined,
       cwd,
+      terminalApp: ctx?.terminalApp || process.env.TERM_PROGRAM || undefined,
       durationMs,
       metadata: {
         agent: 'pi',

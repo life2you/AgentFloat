@@ -6,6 +6,11 @@ public enum SupportedTerminal: String, CaseIterable, Sendable {
     case ghostty = "com.mitchellh.ghostty"
     case terminal = "com.apple.Terminal"
     case iterm2 = "com.googlecode.iterm2"
+    case warp = "dev.warp.Warp-Stable"
+    case wezterm = "com.github.wez.wezterm"
+    case alacritty = "org.alacritty"
+    case vscode = "com.microsoft.VSCode"
+    case cursor = "com.todesktop.230313mzl4w4u92"
     
     public var displayName: String {
         switch self {
@@ -13,6 +18,11 @@ public enum SupportedTerminal: String, CaseIterable, Sendable {
         case .ghostty: return "Ghostty"
         case .terminal: return "Terminal"
         case .iterm2: return "iTerm2"
+        case .warp: return "Warp"
+        case .wezterm: return "WezTerm"
+        case .alacritty: return "Alacritty"
+        case .vscode: return "VS Code"
+        case .cursor: return "Cursor"
         }
     }
     
@@ -23,6 +33,11 @@ public enum SupportedTerminal: String, CaseIterable, Sendable {
         if id.contains("otty") { return .otty }
         if id.contains("ghostty") { return .ghostty }
         if id.contains("iterm") { return .iterm2 }
+        if id.contains("warp") { return .warp }
+        if id.contains("wezterm") { return .wezterm }
+        if id.contains("alacritty") { return .alacritty }
+        if id.contains("cursor") { return .cursor }
+        if id.contains("vscode") || id == "code" { return .vscode }
         if id.contains("terminal") || id.contains("apple") { return .terminal }
         return nil
     }
@@ -38,13 +53,13 @@ public struct TerminalLauncher: Sendable {
         }
         
         let runningBundles = Set(NSWorkspace.shared.runningApplications.compactMap { $0.bundleIdentifier })
-        for candidate: SupportedTerminal in [.otty, .ghostty, .iterm2, .terminal] {
+        for candidate: SupportedTerminal in [.ghostty, .otty, .warp, .wezterm, .alacritty, .cursor, .vscode, .iterm2, .terminal] {
             if runningBundles.contains(candidate.rawValue) {
                 return candidate
             }
         }
         
-        for candidate: SupportedTerminal in [.otty, .ghostty, .iterm2, .terminal] {
+        for candidate: SupportedTerminal in [.ghostty, .otty, .warp, .wezterm, .alacritty, .cursor, .vscode, .iterm2, .terminal] {
             if isInstalled(terminal: candidate) {
                 return candidate
             }

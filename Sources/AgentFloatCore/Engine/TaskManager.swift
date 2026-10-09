@@ -11,6 +11,7 @@ public struct CodexNotificationPayload: Codable, Sendable {
     public var error: String?
     public var durationMs: Int?
     public var title: String?
+    public var terminalApp: String?
     
     enum CodingKeys: String, CodingKey {
         case threadId = "thread_id"
@@ -33,6 +34,8 @@ public struct CodexNotificationPayload: Codable, Sendable {
         case durationMs = "duration_ms"
         case durationMsAlt = "durationMs"
         case title
+        case terminalApp = "terminal_app"
+        case terminalAppAlt = "terminalApp"
     }
     
     public init(
@@ -43,7 +46,8 @@ public struct CodexNotificationPayload: Codable, Sendable {
         status: String? = nil,
         error: String? = nil,
         durationMs: Int? = nil,
-        title: String? = nil
+        title: String? = nil,
+        terminalApp: String? = nil
     ) {
         self.threadId = threadId
         self.turnId = turnId
@@ -53,6 +57,7 @@ public struct CodexNotificationPayload: Codable, Sendable {
         self.error = error
         self.durationMs = durationMs
         self.title = title
+        self.terminalApp = terminalApp
     }
     
     public init(from decoder: Decoder) throws {
@@ -80,6 +85,8 @@ public struct CodexNotificationPayload: Codable, Sendable {
             ?? container.decodeIfPresent(Int.self, forKey: .durationMsAlt)
             
         self.title = try container.decodeIfPresent(String.self, forKey: .title)
+        self.terminalApp = try container.decodeIfPresent(String.self, forKey: .terminalApp)
+            ?? container.decodeIfPresent(String.self, forKey: .terminalAppAlt)
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -225,7 +232,7 @@ public final class TaskManager: ObservableObject {
             status: status,
             errorMessage: payload.error,
             cwd: cwd,
-            terminalApp: nil,
+            terminalApp: payload.terminalApp,
             durationMs: payload.durationMs,
             metadata: ["codex": "true"]
         )

@@ -48,6 +48,7 @@ cwd = data.get("cwd") or ""
 msg = data.get("last_assistant_message") or data.get("last-assistant-message") or data.get("lastAssistantMessage") or data.get("message") or ""
 status = data.get("status") or "completed"
 error = data.get("error") or ""
+term_app = data.get("terminal_app") or os.environ.get("TERM_PROGRAM") or ""
 
 # 识别错误状态
 if error or "fail" in str(status).lower() or "err" in str(status).lower():
@@ -64,6 +65,7 @@ output = {
     "last_assistant_message": msg,
     "status": norm_status,
     "error": error if error else None,
+    "terminal_app": term_app,
     "title": "Codex Turn 执行结束"
 }
 
