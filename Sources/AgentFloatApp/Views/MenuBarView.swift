@@ -120,53 +120,10 @@ public struct MenuBarView: View {
             
             Divider()
             
-            // 底部快捷动作与测试
+            // 底部快捷动作与状态
             VStack(spacing: 8) {
-                HStack(spacing: 8) {
-                    Button(action: {
-                        Task {
-                            _ = try? await taskManager.ingestTask(
-                                source: "test",
-                                sessionId: UUID().uuidString,
-                                turnId: UUID().uuidString,
-                                title: "测试: 模拟构建完成",
-                                promptSummary: "运行 `npm test` 并完成构建",
-                                resultSummary: "所有测试用例已通过，请手动核查输出",
-                                status: .completed,
-                                cwd: FileManager.default.currentDirectoryPath,
-                                durationMs: 1450
-                            )
-                        }
-                    }) {
-                        Label("模拟完成", systemImage: "play.circle.fill")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.bordered)
-                    
-                    Button(action: {
-                        Task {
-                            _ = try? await taskManager.ingestTask(
-                                source: "test",
-                                sessionId: UUID().uuidString,
-                                turnId: UUID().uuidString,
-                                title: "测试: 模拟异常报错",
-                                promptSummary: "执行部署脚本",
-                                resultSummary: "构建流程中断",
-                                status: .error,
-                                errorMessage: "Exit Code 1: CompileError",
-                                cwd: FileManager.default.currentDirectoryPath,
-                                durationMs: 820
-                            )
-                        }
-                    }) {
-                        Label("模拟报错", systemImage: "exclamationmark.octagon.fill")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.bordered)
-                    
-                    Spacer()
-                    
-                    Button("清空历史") {
+                HStack {
+                    Button("清空历史记录") {
                         Task {
                             try? await taskManager.clearResolvedHistory()
                         }
@@ -174,19 +131,13 @@ public struct MenuBarView: View {
                     .buttonStyle(.borderless)
                     .font(.caption)
                     .foregroundColor(.secondary)
-                }
-                
-                Divider()
-                
-                HStack {
-                    Text("零外部依赖 · 专注任务追踪")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                    
                     Spacer()
+                    
                     Button("退出 AgentFloat") {
                         NSApp.terminate(nil)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.bordered)
                     .controlSize(.small)
                 }
             }
