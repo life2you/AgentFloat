@@ -81,4 +81,12 @@ curl -s -X POST "${SERVER_URL}/api/codex/notify" \
      -H "Authorization: Bearer ${TOKEN}" \
      -d "${NORMALIZED_PAYLOAD}" >/dev/null 2>&1 || true
 
+# 5. 支持链式转发：若系统存在下游 notify 处理程序（如 SkyComputerUseClient），保持透传
+SKY_CLIENT="${HOME}/.codex/computer-use/Codex Computer Use.app/Contents/SharedSupport/SkyComputerUseClient.app/Contents/MacOS/SkyComputerUseClient"
+if [ -n "${CODEX_CHAIN_NOTIFY:-}" ] && [ -x "${CODEX_CHAIN_NOTIFY}" ]; then
+    "${CODEX_CHAIN_NOTIFY}" "$@" >/dev/null 2>&1 || true
+elif [ -x "${SKY_CLIENT}" ]; then
+    "${SKY_CLIENT}" "$@" >/dev/null 2>&1 || true
+fi
+
 exit 0
