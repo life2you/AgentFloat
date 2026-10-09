@@ -189,17 +189,14 @@ private struct UltraCompactTaskRow: View {
                             try? await taskManager.resolveTask(id: task.id)
                         }
                     }) {
-                        HStack(spacing: 2) {
-                            Image(systemName: "checkmark")
-                            Text("已处理")
-                        }
-                        .font(.system(size: 9.5, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.vertical, 3)
-                        .padding(.horizontal, 7)
-                        .background(themeColor)
-                        .cornerRadius(4)
-                        .contentShape(Rectangle())
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 9.5, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.vertical, 3)
+                            .padding(.horizontal, 6)
+                            .background(themeColor)
+                            .cornerRadius(4)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .help("标记为已处理")

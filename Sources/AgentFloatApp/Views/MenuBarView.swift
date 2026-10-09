@@ -161,14 +161,20 @@ public struct MenuBarView: View {
                 
                 Spacer()
                 
-                Button("标为已处理") {
+                Button(action: {
                     Task {
                         try? await taskManager.resolveTask(id: task.id)
                     }
+                }) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 9.5, weight: .bold))
+                        .foregroundColor(.green)
+                        .padding(3)
+                        .background(Color.green.opacity(0.12))
+                        .clipShape(Circle())
                 }
-                .buttonStyle(.borderless)
-                .font(.system(size: 10.5, weight: .medium))
-                .foregroundColor(.green)
+                .buttonStyle(.plain)
+                .help("标记为已处理")
             }
         }
         .padding(8)
