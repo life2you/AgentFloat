@@ -2,6 +2,15 @@
 
 所有重要的项目演进与版本更迭均记录于此。遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 规范。
 
+## [1.0.1] - 2026-10-10
+
+### 新增 (Added)
+- **视觉设计与品牌图标 (App Icon)**:
+  - 全新设计并生成 macOS 原生 Squircle 应用图标（深色宇宙渐变、双层玻璃拟态悬浮卡片堆叠、高精终端提示符 `>` 与贝塞尔曲线 AI 灵动星标 `✦`）。
+  - 内置 `scripts/generate-app-icon.py` 自动化多分辨率生成脚本（支持 1024x1024 Master PNG 与 `AppIcon.icns`）。
+  - 打包流程（`build-app.sh`）与 `Info.plist` 全面集成原生图标支持。
+  - Homebrew Cask 与 GitHub Release 全面集成该原生应用图标。
+
 ## [1.0.0] - 2026-03-31
 
 ### 新增 (Added)
