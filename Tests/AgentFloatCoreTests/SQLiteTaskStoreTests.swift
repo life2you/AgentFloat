@@ -46,6 +46,71 @@ struct SQLiteTaskStoreTests {
         let allPending = try await store.getPendingTasks()
         #expect(allPending.count == 1)
     }
+
+    @Test("同一 Session 的新轮次自动覆盖前一个未处理任务")
+    func sameSessionMultipleTurnsOverwritePending() async throws {
+        let (store, path) = try createTempStore()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        
+        // 1. Session 1 第 1 轮
+        let turn1 = AgentTask(
+            id: "turn-1-id",
+            source: "pi",
+            sessionId: "session-pi-1",
+            turnId: "turn-1",
+            title: "Pi: 代码直接提交",
+            status: .completed,
+            durationMs: 267200
+        )
+        _ = try await store.upsertTask(turn1)
+        
+        var pending = try await store.getPendingTasks()
+        #expect(pending.count == 1)
+        #expect(pending[0].title == "Pi: 代码直接提交")
+        
+        // 用户暂时未处理，中途将卡片临时关闭 (X)
+        try await store.markCardDismissed(id: turn1.id)
+        var undismissed = try await store.getUndismissedTasks()
+        #expect(undismissed.isEmpty) // 卡片已隐藏
+        
+        // 2. 同一个 Session 发生第 2 轮
+        let turn2 = AgentTask(
+            id: "turn-2-id",
+            source: "pi",
+            sessionId: "session-pi-1",
+            turnId: "turn-2",
+            title: "Pi: 我说的是当前未提交的新接口...",
+            status: .completed,
+            durationMs: 57700
+        )
+        let savedTurn2 = try await store.upsertTask(turn2)
+        #expect(savedTurn2.title == "Pi: 我说的是当前未提交的新接口...")
+        
+        // 验证：直接覆盖了前一个任务，且卡片重新唤醒 (dismissedCard == false)
+        pending = try await store.getPendingTasks()
+        #expect(pending.count == 1) // 依然只有 1 个任务，绝不累积
+        #expect(pending[0].title == "Pi: 我说的是当前未提交的新接口...")
+        #expect(pending[0].turnId == "turn-2")
+        #expect(pending[0].id == "turn-1-id") // 保持原有任务槽位更新
+        #expect(!pending[0].dismissedCard) // 自动重新展示卡片
+        
+        undismissed = try await store.getUndismissedTasks()
+        #expect(undismissed.count == 1)
+        
+        // 3. 不同的 Session 应独立保留
+        let anotherSessionTask = AgentTask(
+            id: "another-session-id",
+            source: "pi",
+            sessionId: "session-pi-2",
+            turnId: "turn-1",
+            title: "Pi: 另一个项目任务",
+            status: .completed
+        )
+        _ = try await store.upsertTask(anotherSessionTask)
+        
+        pending = try await store.getPendingTasks()
+        #expect(pending.count == 2) // 两个不同 Session 各自保留最新 1 个
+    }
     
     @Test("待办获取与处理完成")
     func pendingAndResolve() async throws {

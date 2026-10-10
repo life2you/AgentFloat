@@ -56,6 +56,7 @@ public actor SQLiteTaskStore {
         let dbPointer = try Self.openDatabase(at: path)
         try Self.configurePragmas(on: dbPointer)
         try Self.createTables(on: dbPointer)
+        try Self.cleanupDuplicatePendingTasks(on: dbPointer)
         self.handle = DatabaseHandle(pointer: dbPointer)
     }
     
@@ -128,6 +129,25 @@ public actor SQLiteTaskStore {
         try executeStatic(sql: createHistoryIndex, on: db)
     }
     
+    /// 清理同 Session 历史残留的多个未处理任务，仅保留更新时间最新的一条
+    private static func cleanupDuplicatePendingTasks(on db: OpaquePointer) throws {
+        let sql = """
+        DELETE FROM tasks
+        WHERE is_resolved = 0
+          AND id NOT IN (
+            SELECT t1.id FROM tasks t1
+            WHERE t1.is_resolved = 0
+              AND t1.updated_at = (
+                SELECT MAX(t2.updated_at) FROM tasks t2
+                WHERE t2.source = t1.source
+                  AND t2.session_id = t1.session_id
+                  AND t2.is_resolved = 0
+              )
+          );
+        """
+        try executeStatic(sql: sql, on: db)
+    }
+    
     private static func executeStatic(sql: String, on db: OpaquePointer) throws {
         var errorMsg: UnsafeMutablePointer<CChar>?
         defer {
@@ -157,23 +177,146 @@ public actor SQLiteTaskStore {
         }
     }
     
-    /// 插入或基于 (source, session_id, turn_id) 进行去重更新
+    /// 更新指定记录内容
+    private func updateTaskRow(id: String, task: AgentTask, metadataJson: String?) throws {
+        guard let db = db else { throw TaskStoreError.databaseOpenFailed("数据库未连接") }
+        let sql = """
+        UPDATE tasks SET
+            turn_id = ?,
+            title = ?,
+            prompt_summary = ?,
+            result_summary = ?,
+            status = ?,
+            error_message = ?,
+            cwd = ?,
+            terminal_app = ?,
+            is_resolved = ?,
+            dismissed_card = ?,
+            updated_at = ?,
+            duration_ms = ?,
+            metadata = ?
+        WHERE id = ?;
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            let msg = String(cString: sqlite3_errmsg(db))
+            throw TaskStoreError.prepareFailed(msg)
+        }
+        defer { sqlite3_finalize(stmt) }
+        let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+        
+        sqlite3_bind_text(stmt, 1, (task.turnId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, (task.title as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        
+        if let prompt = task.promptSummary {
+            sqlite3_bind_text(stmt, 3, (prompt as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        } else {
+            sqlite3_bind_null(stmt, 3)
+        }
+        
+        if let result = task.resultSummary {
+            sqlite3_bind_text(stmt, 4, (result as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        } else {
+            sqlite3_bind_null(stmt, 4)
+        }
+        
+        sqlite3_bind_text(stmt, 5, (task.status.rawValue as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        
+        if let error = task.errorMessage {
+            sqlite3_bind_text(stmt, 6, (error as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        } else {
+            sqlite3_bind_null(stmt, 6)
+        }
+        
+        if let cwd = task.cwd {
+            sqlite3_bind_text(stmt, 7, (cwd as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        } else {
+            sqlite3_bind_null(stmt, 7)
+        }
+        
+        if let terminal = task.terminalApp {
+            sqlite3_bind_text(stmt, 8, (terminal as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        } else {
+            sqlite3_bind_null(stmt, 8)
+        }
+        
+        sqlite3_bind_int(stmt, 9, task.isResolved ? 1 : 0)
+        sqlite3_bind_int(stmt, 10, task.dismissedCard ? 1 : 0)
+        sqlite3_bind_double(stmt, 11, task.updatedAt.timeIntervalSince1970)
+        
+        if let duration = task.durationMs {
+            sqlite3_bind_int64(stmt, 12, Int64(duration))
+        } else {
+            sqlite3_bind_null(stmt, 12)
+        }
+        
+        if let meta = metadataJson {
+            sqlite3_bind_text(stmt, 13, (meta as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        } else {
+            sqlite3_bind_null(stmt, 13)
+        }
+        
+        sqlite3_bind_text(stmt, 14, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        
+        guard sqlite3_step(stmt) == SQLITE_DONE else {
+            let msg = String(cString: sqlite3_errmsg(db))
+            throw TaskStoreError.executionFailed("Update 失败: \(msg)")
+        }
+    }
+
+    /// 删除同一个 Session 除当前 targetId 以外的多余未处理任务
+    private func deleteOtherUnresolvedTasks(source: String, sessionId: String, keepingId: String) throws {
+        guard let db = db else { return }
+        let sql = "DELETE FROM tasks WHERE source = ? AND session_id = ? AND is_resolved = 0 AND id != ?;"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        defer { sqlite3_finalize(stmt) }
+        let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+        sqlite3_bind_text(stmt, 1, (source as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 3, (keepingId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        _ = sqlite3_step(stmt)
+    }
+
+    /// 插入或更新任务：同一个 Session 的新任务优先覆盖更新已有的未处理任务
     @discardableResult
     public func upsertTask(_ task: AgentTask) throws -> AgentTask {
         guard let db = db else {
             throw TaskStoreError.databaseOpenFailed("数据库未连接")
         }
         
-        // 检查是否已存在具有相同 (source, session_id, turn_id) 的记录
-        let existing = try getTaskByNaturalKey(source: task.source, sessionId: task.sessionId, turnId: task.turnId)
-        
-        let targetId = existing?.id ?? task.id
-        let createdAt = existing?.createdAt ?? task.createdAt
-        let updatedAt = task.updatedAt
         let metadataJson: String? = {
             guard let metadata = task.metadata, !metadata.isEmpty else { return nil }
             return try? String(data: JSONEncoder().encode(metadata), encoding: .utf8)
         }()
+        
+        // 1. 如果新任务尚未处理，且同一个 Session 存在历史未处理任务，直接用最新任务覆盖该未处理任务
+        if !task.isResolved,
+           let existingUnresolved = try getUnresolvedTask(source: task.source, sessionId: task.sessionId) {
+            let targetId = existingUnresolved.id
+            try updateTaskRow(id: targetId, task: task, metadataJson: metadataJson)
+            try deleteOtherUnresolvedTasks(source: task.source, sessionId: task.sessionId, keepingId: targetId)
+            guard let saved = try getTask(id: targetId) else {
+                throw TaskStoreError.recordNotFound(targetId)
+            }
+            return saved
+        }
+        
+        // 2. 检查是否已存在具有相同 (source, session_id, turn_id) 的记录
+        let existing = try getTaskByNaturalKey(source: task.source, sessionId: task.sessionId, turnId: task.turnId)
+        if let existing = existing {
+            let targetId = existing.id
+            try updateTaskRow(id: targetId, task: task, metadataJson: metadataJson)
+            guard let saved = try getTask(id: targetId) else {
+                throw TaskStoreError.recordNotFound(targetId)
+            }
+            return saved
+        }
+        
+        // 3. 插入新记录
+        let targetId = task.id
+        let createdAt = task.createdAt
+        let updatedAt = task.updatedAt
         
         let sql = """
         INSERT INTO tasks (
@@ -377,6 +520,20 @@ public actor SQLiteTaskStore {
         WHERE id = ? LIMIT 1;
         """
         let list = try queryTasks(sql: sql, bindings: [id])
+        return list.first
+    }
+    
+    /// 获取指定 (source, session_id) 当前未处理的任务 (is_resolved = 0)
+    public func getUnresolvedTask(source: String, sessionId: String) throws -> AgentTask? {
+        let sql = """
+        SELECT id, source, session_id, turn_id, title, prompt_summary, result_summary,
+               status, error_message, cwd, terminal_app, is_resolved, dismissed_card,
+               created_at, updated_at, duration_ms, metadata
+        FROM tasks
+        WHERE source = ? AND session_id = ? AND is_resolved = 0
+        ORDER BY updated_at DESC LIMIT 1;
+        """
+        let list = try queryTasks(sql: sql, bindings: [source, sessionId])
         return list.first
     }
     
