@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-AgentFloat macOS App Icon Generator (Harmonious Spacing Edition)
+AgentFloat macOS App Icon Generator - Concept A (Floating HUD Capsule & Status Beacon)
+Generates the master 1024x1024 PNG, multi-res iconset, and macOS AppIcon.icns.
 """
 
 from __future__ import annotations
@@ -20,17 +21,14 @@ APP_RESOURCES_ICNS = ROOT / "Sources" / "AgentFloatApp" / "Resources" / "AppIcon
 SS = 2
 CANVAS_SIZE = 1024 * SS
 
-
 def S(val: float | int) -> int:
     return int(round(val * SS))
-
 
 def rounded_rect_mask(size: int, bounds: tuple[int, int, int, int], radius: int) -> Image.Image:
     mask = Image.new("L", (size, size), 0)
     draw = ImageDraw.Draw(mask)
     draw.rounded_rectangle(bounds, radius=radius, fill=255)
     return mask
-
 
 def draw_glow(canvas: Image.Image, center: tuple[int, int], radius: int, color: tuple[int, int, int, int], blur: int):
     glow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
@@ -40,59 +38,27 @@ def draw_glow(canvas: Image.Image, center: tuple[int, int], radius: int, color: 
     glow = glow.filter(ImageFilter.GaussianBlur(blur))
     canvas.alpha_composite(glow)
 
-
-def quadratic_bezier(p0: tuple[float, float], p_ctrl: tuple[float, float], p1: tuple[float, float], steps: int = 24) -> list[tuple[float, float]]:
-    pts = []
-    for i in range(steps):
-        t = i / steps
-        one_minus_t = 1.0 - t
-        x = (one_minus_t ** 2) * p0[0] + 2 * one_minus_t * t * p_ctrl[0] + (t ** 2) * p1[0]
-        y = (one_minus_t ** 2) * p0[1] + 2 * one_minus_t * t * p_ctrl[1] + (t ** 2) * p1[1]
-        pts.append((x, y))
-    return pts
-
-
-def create_bezier_sparkle(cx: float, cy: float, radius: float, steps: int = 24) -> list[tuple[float, float]]:
-    """Creates a mathematically pristine Apple/AI 4-point sparkle star."""
-    top = (cx, cy - radius)
-    right = (cx + radius, cy)
-    bottom = (cx, cy + radius)
-    left = (cx - radius, cy)
-    ctrl = (cx, cy)
-    
-    curve1 = quadratic_bezier(top, ctrl, right, steps)
-    curve2 = quadratic_bezier(right, ctrl, bottom, steps)
-    curve3 = quadratic_bezier(bottom, ctrl, left, steps)
-    curve4 = quadratic_bezier(left, ctrl, top, steps)
-    
-    return curve1 + curve2 + curve3 + curve4
-
-
 def build_master_icon() -> Image.Image:
     size = CANVAS_SIZE
     output = Image.new("RGBA", (size, size), (0, 0, 0, 0))
 
-    # --- 1. Base Squircle Dimensions ---
     sq_x0, sq_y0, sq_x1, sq_y1 = S(112), S(112), S(912), S(912)
-    sq_w = sq_x1 - sq_x0
-    sq_h = sq_y1 - sq_y0
     sq_radius = S(184)
+    sq_h = sq_y1 - sq_y0
 
-    # --- 2. System Drop Shadow below Squircle ---
+    # System Drop Shadow below Squircle
     sq_shadow = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     ss_draw = ImageDraw.Draw(sq_shadow)
-    ss_draw.rounded_rectangle((sq_x0 + S(6), sq_y0 + S(32), sq_x1 - S(6), sq_y1 + S(48)), radius=sq_radius, fill=(0, 0, 0, 135))
-    ss_draw.rounded_rectangle((sq_x0 + S(16), sq_y0 + S(50), sq_x1 - S(16), sq_y1 + S(66)), radius=sq_radius, fill=(0, 0, 0, 95))
+    ss_draw.rounded_rectangle((sq_x0 + S(6), sq_y0 + S(34), sq_x1 - S(6), sq_y1 + S(50)), radius=sq_radius, fill=(0, 0, 0, 140))
+    ss_draw.rounded_rectangle((sq_x0 + S(16), sq_y0 + S(52), sq_x1 - S(16), sq_y1 + S(68)), radius=sq_radius, fill=(0, 0, 0, 100))
     sq_shadow = sq_shadow.filter(ImageFilter.GaussianBlur(S(36)))
     output.alpha_composite(sq_shadow)
 
-    # --- 3. Base Squircle Canvas ---
+    # Base Squircle Gradient: Deep Cosmic Obsidian (#141726 -> #090B12)
     base = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     b_pixels = base.load()
-
-    # Premium Deep Cosmic Gradient: Midnight Obsidian (#151828) -> Deep Charcoal (#0A0C13)
-    top_color = (21, 24, 40)
-    bottom_color = (10, 12, 19)
+    top_color = (20, 24, 38)
+    bottom_color = (9, 11, 18)
 
     for y in range(sq_y0, sq_y1 + 1):
         ty = (y - sq_y0) / sq_h
@@ -102,181 +68,104 @@ def build_master_icon() -> Image.Image:
         for x in range(sq_x0, sq_x1 + 1):
             b_pixels[x, y] = (r, g, b, 255)
 
-    # Ambient Atmospheric Lighting on Base
-    draw_glow(base, (S(740), S(230)), S(260), (16, 185, 129, 90), S(95))   # Top-right emerald
-    draw_glow(base, (S(260), S(780)), S(270), (99, 102, 241, 75), S(95))   # Bottom-left indigo
-    draw_glow(base, (S(512), S(512)), S(210), (56, 189, 248, 65), S(85))   # Center cyan aura
+    # Ambient Glows
+    draw_glow(base, (S(700), S(300)), S(280), (16, 185, 129, 95), S(100))  # Emerald top-right
+    draw_glow(base, (S(300), S(720)), S(260), (56, 189, 248, 80), S(90))   # Cyan bottom-left
+    draw_glow(base, (S(512), S(512)), S(220), (99, 102, 241, 60), S(85))   # Center aura
 
-    # High-tech background grid dots
-    grid_img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    gdraw = ImageDraw.Draw(grid_img)
-    step = S(48)
-    for gx in range(sq_x0 + S(36), sq_x1 - S(36), step):
-        for gy in range(sq_y0 + S(36), sq_y1 - S(36), step):
-            gdraw.ellipse((gx - S(1.5), gy - S(1.5), gx + S(1.5), gy + S(1.5)), fill=(255, 255, 255, 16))
-    base.alpha_composite(grid_img)
+    # Background subtle radial rings (Radar / Sounding pulse)
+    rings = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    rdraw = ImageDraw.Draw(rings)
+    cx, cy = S(512), S(512)
+    for r in [S(220), S(310), S(390)]:
+        rdraw.ellipse((cx - r, cy - r, cx + r, cy + r), outline=(255, 255, 255, 12), width=S(1.5))
+    base.alpha_composite(rings)
 
-    # --- 4. Layer 1: Background Secondary Floating Card (Stacking Depth) ---
-    bg_card_x0, bg_card_y0, bg_card_x1, bg_card_y1 = S(246), S(206), S(778), S(420)
-    bg_radius = S(46)
-    
-    bg_shadow = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    bgs_draw = ImageDraw.Draw(bg_shadow)
-    bgs_draw.rounded_rectangle((bg_card_x0, bg_card_y0 + S(18), bg_card_x1, bg_card_y1 + S(28)), radius=bg_radius, fill=(0, 0, 0, 115))
-    bg_shadow = bg_shadow.filter(ImageFilter.GaussianBlur(S(22)))
-    base.alpha_composite(bg_shadow)
+    # Hero Element: 3D Floating HUD Capsule
+    cap_w, cap_h = S(580), S(240)
+    cap_x0 = cx - cap_w // 2
+    cap_y0 = cy - cap_h // 2
+    cap_x1 = cap_x0 + cap_w
+    cap_y1 = cap_y0 + cap_h
+    cap_r = cap_h // 2
 
-    bg_card = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    bgc_draw = ImageDraw.Draw(bg_card)
-    bgc_draw.rounded_rectangle(
-        (bg_card_x0, bg_card_y0, bg_card_x1, bg_card_y1),
-        radius=bg_radius,
-        fill=(32, 40, 64, 155),
-        outline=(255, 255, 255, 30),
-        width=S(1.5)
-    )
-    base.alpha_composite(bg_card)
+    # Capsule 3D Drop Shadow
+    cap_shadow = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    cs_draw = ImageDraw.Draw(cap_shadow)
+    cs_draw.rounded_rectangle((cap_x0 + S(8), cap_y0 + S(36), cap_x1 - S(8), cap_y1 + S(54)), radius=cap_r, fill=(0, 0, 0, 190))
+    cs_draw.rounded_rectangle((cap_x0 + S(16), cap_y0 + S(54), cap_x1 - S(16), cap_y1 + S(74)), radius=cap_r, fill=(0, 0, 0, 120))
+    cap_shadow = cap_shadow.filter(ImageFilter.GaussianBlur(S(36)))
+    base.alpha_composite(cap_shadow)
 
-    # --- 5. Layer 2: Hero Floating Card (The Active Window) ---
-    fc_x0, fc_y0, fc_x1, fc_y1 = S(194), S(266), S(830), S(804)
-    fc_radius = S(56)
+    # Capsule Frosted Glass Body
+    cap_surf = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    cdraw = ImageDraw.Draw(cap_surf)
+    cdraw.rounded_rectangle((cap_x0, cap_y0, cap_x1, cap_y1), radius=cap_r, fill=(24, 32, 52, 235), outline=(255, 255, 255, 60), width=S(2))
+    # Top highlight sheen
+    cdraw.rounded_rectangle((cap_x0 + S(2), cap_y0 + S(2), cap_x1 - S(2), cap_y0 + cap_h // 2), radius=cap_r, fill=(255, 255, 255, 22))
 
-    # 3D Floating Shadow cast on base
-    fc_shadow = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    fcs_draw = ImageDraw.Draw(fc_shadow)
-    fcs_draw.rounded_rectangle((fc_x0 + S(4), fc_y0 + S(28), fc_x1 - S(4), fc_y1 + S(46)), radius=fc_radius, fill=(0, 0, 0, 185))
-    fcs_draw.rounded_rectangle((fc_x0 + S(14), fc_y0 + S(44), fc_x1 - S(14), fc_y1 + S(64)), radius=fc_radius, fill=(0, 0, 0, 125))
-    fc_shadow = fc_shadow.filter(ImageFilter.GaussianBlur(S(32)))
-    base.alpha_composite(fc_shadow)
+    # Left: Luminous Emerald Status Beacon (The "Completed & Live" Sentinel)
+    beacon_cx = cap_x0 + cap_h // 2
+    beacon_cy = cy
 
-    # Frosted Glass Card Surface
-    fc_surf = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    fcsurf_draw = ImageDraw.Draw(fc_surf)
+    # Beacon pulse rings
+    draw_glow(cap_surf, (beacon_cx, beacon_cy), S(75), (16, 185, 129, 140), S(25))
+    cdraw.ellipse((beacon_cx - S(48), beacon_cy - S(48), beacon_cx + S(48), beacon_cy + S(48)), outline=(52, 211, 153, 140), width=S(2))
+    cdraw.ellipse((beacon_cx - S(32), beacon_cy - S(32), beacon_cx + S(32), beacon_cy + S(32)), fill=(16, 185, 129, 255))
+    cdraw.ellipse((beacon_cx - S(18), beacon_cy - S(18), beacon_cx + S(18), beacon_cy + S(18)), fill=(209, 250, 229, 255))
+    cdraw.ellipse((beacon_cx - S(8), beacon_cy - S(8), beacon_cx + S(8), beacon_cy + S(8)), fill=(255, 255, 255, 255))
 
-    # Dark frosted glass fill
-    fcsurf_draw.rounded_rectangle(
-        (fc_x0, fc_y0, fc_x1, fc_y1),
-        radius=fc_radius,
-        fill=(24, 30, 48, 240),
-        outline=(255, 255, 255, 45),
-        width=S(2)
-    )
+    # Center-Right: High-Tech HUD Activity Waveform & Floating Badge
+    line_x_start = beacon_cx + S(80)
+    line_x_end = cap_x1 - S(60)
 
-    # Glass top sheen
-    sheen = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    sheen_draw = ImageDraw.Draw(sheen)
-    sheen_draw.rounded_rectangle(
-        (fc_x0 + S(2), fc_y0 + S(2), fc_x1 - S(2), fc_y0 + S(84)),
-        radius=fc_radius,
-        fill=(255, 255, 255, 18)
-    )
-    fc_surf.alpha_composite(sheen)
+    # Activity bars / waveform
+    bars = [S(24), S(42), S(70), S(96), S(65), S(88), S(45), S(60), S(35)]
+    bar_step = (line_x_end - line_x_start) / (len(bars) - 1)
+    for i, bh in enumerate(bars):
+        bx = int(line_x_start + i * bar_step)
+        by0 = cy - bh // 2
+        by1 = cy + bh // 2
+        t = i / (len(bars) - 1)
+        bar_color = (
+            int(56 + (52 - 56) * t),
+            int(189 + (211 - 189) * t),
+            int(248 + (153 - 248) * t),
+            230
+        )
+        cdraw.rounded_rectangle((bx - S(5), by0, bx + S(5), by1), radius=S(4), fill=bar_color)
 
-    # Window Header Traffic Lights
-    dot_y = fc_y0 + S(44)
-    dot_r = S(10)
-    # Red
-    fcsurf_draw.ellipse((fc_x0 + S(44) - dot_r, dot_y - dot_r, fc_x0 + S(44) + dot_r, dot_y + dot_r), fill=(244, 63, 94, 235))
-    # Yellow
-    fcsurf_draw.ellipse((fc_x0 + S(74) - dot_r, dot_y - dot_r, fc_x0 + S(74) + dot_r, dot_y + dot_r), fill=(251, 191, 36, 235))
-    # Green (Active notification state with micro-glow)
-    fcsurf_draw.ellipse((fc_x0 + S(104) - dot_r, dot_y - dot_r, fc_x0 + S(104) + dot_r, dot_y + dot_r), fill=(52, 211, 153, 255))
+    # Floating Satellite Sparkle on top-right of capsule
+    sat_cx, sat_cy = cap_x1 - S(20), cap_y0 - S(20)
+    draw_glow(cap_surf, (sat_cx, sat_cy), S(45), (56, 189, 248, 160), S(15))
+    sparkle_pts = [
+        (sat_cx, sat_cy - S(40)),
+        (sat_cx + S(10), sat_cy - S(10)),
+        (sat_cx + S(40), sat_cy),
+        (sat_cx + S(10), sat_cy + S(10)),
+        (sat_cx, sat_cy + S(40)),
+        (sat_cx - S(10), sat_cy + S(10)),
+        (sat_cx - S(40), sat_cy),
+        (sat_cx - S(10), sat_cy - S(10)),
+    ]
+    cdraw.polygon(sparkle_pts, fill=(255, 255, 255, 255))
 
-    # Header Divider Line
-    header_line_y = fc_y0 + S(82)
-    fcsurf_draw.line((fc_x0, header_line_y, fc_x1, header_line_y), fill=(255, 255, 255, 25), width=S(1.2))
+    base.alpha_composite(cap_surf)
 
-    # Right-side Header Badge: AgentFloat status pill (matching in-app "1 pending" badge)
-    badge_w, badge_h = S(76), S(24)
-    badge_x1 = fc_x1 - S(38)
-    badge_x0 = badge_x1 - badge_w
-    badge_y0 = dot_y - badge_h // 2
-    badge_y1 = badge_y0 + badge_h
-    fcsurf_draw.rounded_rectangle((badge_x0, badge_y0, badge_x1, badge_y1), radius=badge_h // 2, fill=(16, 185, 129, 45), outline=(52, 211, 153, 160), width=S(1))
-    fcsurf_draw.ellipse((badge_x0 + S(12) - S(4), dot_y - S(4), badge_x0 + S(12) + S(4), dot_y + S(4)), fill=(52, 211, 153, 255))
-    fcsurf_draw.line((badge_x0 + S(24), dot_y, badge_x1 - S(14), dot_y), fill=(255, 255, 255, 180), width=S(2.5))
-
-    base.alpha_composite(fc_surf)
-
-    # --- 6. Foreground Hero Glyph Area ---
-    glyph_cx = (fc_x0 + fc_x1) // 2
-    glyph_cy = (header_line_y + fc_y1) // 2
-
-    # A. Volumetric Ambient Glow behind Hero Emblem
-    draw_glow(base, (glyph_cx - S(110), glyph_cy), S(135), (56, 189, 248, 115), S(42))
-    draw_glow(base, (glyph_cx + S(90), glyph_cy), S(145), (52, 211, 153, 130), S(45))
-
-    # B. Continuous Seamless Terminal Chevron `>` (Refined Proportion & Spacing)
-    ch_layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    ch_draw = ImageDraw.Draw(ch_layer)
-
-    ch_left = glyph_cx - S(185)
-    ch_apex = glyph_cx - S(70)
-    ch_top = glyph_cy - S(105)
-    ch_bot = glyph_cy + S(105)
-    stroke_w = S(34)
-
-    ch_pts = [(ch_left, ch_top), (ch_apex, glyph_cy), (ch_left, ch_bot)]
-    ch_draw.line(ch_pts, fill=(56, 189, 248, 255), width=stroke_w, joint="curve")
-
-    # Round caps for top & bottom
-    cap_r = stroke_w // 2
-    ch_draw.ellipse((ch_left - cap_r, ch_top - cap_r, ch_left + cap_r, ch_top + cap_r), fill=(56, 189, 248, 255))
-    ch_draw.ellipse((ch_left - cap_r, ch_bot - cap_r, ch_left + cap_r, ch_bot + cap_r), fill=(56, 189, 248, 255))
-
-    # Inner Core Specular Highlight (Crisp White Line)
-    spec_w = S(10)
-    ch_draw.line(ch_pts, fill=(240, 253, 250, 230), width=spec_w, joint="curve")
-    base.alpha_composite(ch_layer)
-
-    # C. Pristine Bezier AI Agent Star `✦` (Perfect Breathing Room)
-    star_layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    sdraw = ImageDraw.Draw(star_layer)
-
-    star_cx = glyph_cx + S(90)
-    star_cy = glyph_cy
-    star_radius = S(118)
-
-    star_pts = create_bezier_sparkle(star_cx, star_cy, star_radius, steps=32)
-    
-    # Soft core glow
-    draw_glow(star_layer, (star_cx, star_cy), S(65), (255, 255, 255, 180), S(18))
-    draw_glow(star_layer, (star_cx, star_cy), S(115), (52, 211, 153, 140), S(36))
-
-    # Star Polygon Fill (Crisp pure white with cyan halo)
-    sdraw.polygon(star_pts, fill=(255, 255, 255, 255))
-
-    # Brilliant central lens glint
-    sdraw.ellipse((star_cx - S(12), star_cy - S(12), star_cx + S(12), star_cy + S(12)), fill=(255, 255, 255, 255))
-
-    # Satellite Accent Sparkle (Top-Right of Star)
-    sat_cx, sat_cy = star_cx + S(84), star_cy - S(76)
-    sat_pts = create_bezier_sparkle(sat_cx, sat_cy, S(36), steps=20)
-    sdraw.polygon(sat_pts, fill=(56, 189, 248, 245))
-
-    base.alpha_composite(star_layer)
-
-    # --- 7. Outer Squircle Rim Bevel / Inner Highlight ---
+    # Outer Squircle Rim Bevel
     rim = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     rdraw = ImageDraw.Draw(rim)
-    rdraw.rounded_rectangle(
-        (sq_x0, sq_y0, sq_x1, sq_y1),
-        radius=sq_radius,
-        outline=(255, 255, 255, 46),
-        width=S(2)
-    )
-    # Top edge light reflection
+    rdraw.rounded_rectangle((sq_x0, sq_y0, sq_x1, sq_y1), radius=sq_radius, outline=(255, 255, 255, 45), width=S(2))
     rdraw.line((sq_x0 + S(110), sq_y0 + S(1.5), sq_x1 - S(110), sq_y0 + S(1.5)), fill=(255, 255, 255, 95), width=S(2))
     base.alpha_composite(rim)
 
-    # --- 8. Final Squircle Mask Application ---
+    # Mask to Squircle
     mask = rounded_rect_mask(size, (sq_x0, sq_y0, sq_x1, sq_y1), sq_radius)
     output.paste(base, (0, 0), mask)
 
-    # Downscale from 2048 to 1024 with LANCZOS for razor-sharp, flawless anti-aliasing
-    final_master = output.resize((1024, 1024), Image.Resampling.LANCZOS)
-    return final_master
-
+    # 2x Lanczos Downsampling to 1024x1024
+    final_img = output.resize((1024, 1024), Image.Resampling.LANCZOS)
+    return final_img
 
 def ensure_iconset(master: Image.Image) -> None:
     if ICONSET_DIR.exists():
@@ -300,7 +189,6 @@ def ensure_iconset(master: Image.Image) -> None:
         resized = master.resize((px, px), Image.Resampling.LANCZOS)
         resized.save(ICONSET_DIR / filename)
 
-
 def build_icns() -> None:
     subprocess.run(
         ["/usr/bin/iconutil", "-c", "icns", str(ICONSET_DIR), "-o", str(ICNS_PATH)],
@@ -309,10 +197,9 @@ def build_icns() -> None:
     APP_RESOURCES_ICNS.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(ICNS_PATH, APP_RESOURCES_ICNS)
 
-
-def main() -> None:
+def main():
     ASSET_DIR.mkdir(parents=True, exist_ok=True)
-    print("🎨 正在生成和谐版 AgentFloat 原生应用图标...")
+    print("🎨 正在生成 AgentFloat 灵动悬浮舱官方应用图标...")
     master = build_master_icon()
     master.save(MASTER_PNG)
     print(f"✅ 生成高清 Master PNG: {MASTER_PNG}")
@@ -321,7 +208,6 @@ def main() -> None:
     build_icns()
     print(f"✅ 生成 macOS AppIcon.icns: {ICNS_PATH}")
     print(f"✅ 已同步至工程资源目录: {APP_RESOURCES_ICNS}")
-
 
 if __name__ == "__main__":
     main()
