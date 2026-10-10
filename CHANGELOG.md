@@ -2,6 +2,15 @@
 
 所有重要的项目演进与版本更迭均记录于此。遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 规范。
 
+## [1.0.4] - 2026-10-10
+
+### 新增与优化 (Added & Improved)
+- **开箱即用 · 零配置自动挂载**:
+  - 新增 `AutoIntegrationManager`，应用启动时全自动检测本机安装的 Codex（`~/.codex`）与 Pi Agent（`~/.pi/agent`），后台无感完成通知 Hook 与 TypeScript 扩展部署。
+  - CLI 新增 `agentfloat setup` 命令，支持随时一键检测与自动修复各 Agent 生态挂载。
+  - 菜单栏 Popover 增加环境联动状态展示与一键「重新检测」按钮。
+  - 用户不再需要手动寻找文件路径或编辑任何配置文件，真正实现一键傻瓜式直连。
+
 ## [1.0.3] - 2026-10-10
 
 ### 新增与优化 (Added & Improved)

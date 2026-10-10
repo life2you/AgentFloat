@@ -42,6 +42,7 @@ struct AgentFloatCLI {
             --pending          仅显示未处理任务 (默认)
 
           resolve <id>       标记指定任务为已处理
+          setup              一键自动检测并配置本地 Codex 与 Pi Agent 联动
           token              查看当前本地鉴权 Token
           health             检测 AgentFloat 服务健康状态
           help, -h, --help   显示本帮助信息
@@ -368,6 +369,20 @@ struct AgentFloatCLI {
         }
     }
 
+    static func handleSetup(args: [String]) {
+        print("🔍 正在自动检测并配置本地 Agent 生态...")
+        let status = AutoIntegrationManager.autoSetupAll()
+        for msg in status.messages {
+            print("  • \(msg)")
+        }
+        print("")
+        if status.codexConfigured || status.piConfigured {
+            print("✨ 配置完成！Codex 与 Pi Agent 轮次结束时将自动向 AgentFloat 悬浮窗上报任务。")
+        } else {
+            print("💡 未检测到本地已安装的 Codex (~/.codex) 或 Pi Agent (~/.pi/agent)。后续安装后启动 AgentFloat 即可自动连接。")
+        }
+    }
+
     static func main() async {
         let args = Array(CommandLine.arguments.dropFirst())
 
@@ -389,6 +404,8 @@ struct AgentFloatCLI {
             await handleList(args: subArgs)
         case "resolve":
             await handleResolve(args: subArgs)
+        case "setup":
+            handleSetup(args: subArgs)
         case "token":
             handleToken()
         case "health":

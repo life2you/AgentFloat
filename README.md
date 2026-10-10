@@ -43,8 +43,8 @@
   HTTP 服务基于 `Network.framework` 强绑定 `127.0.0.1` 环回接口，拒绝外部网络监听。开机自动生成 32 字节高强度鉴权 Token，保存在 `~/.agentfloat/auth_token` 并应用严格的 POSIX `0600` 权限保护。
 - 🗄 **高并发安全存储 (`SQLiteTaskStore`)**：
   原生 SQLite3 C API actor 封装，启用 WAL 模式与唯一去重索引 `(source, session_id, turn_id)`，天然防御 Webhook 重复推送或重试产生的通知风暴。
-- 🧩 **全生态接入**：
-  原生集成 **Pi Extension**、**Codex CLI Hook**，以及功能完备的 `agentfloat` 命令行工具。
+- 🧩 **全生态接入与零配置直连**：
+  开箱即用！应用启动时自动检测本机安装的 **Codex (CLI & 桌面版)** 与 **Pi Agent**，并在后台全自动完成通知挂载与扩展安装，用户无需手动查找路径或编辑任何配置文件。
 
 ---
 
@@ -154,47 +154,21 @@ agentfloat health
 
 ---
 
-## 🔌 生态集成与配置
+## 🔌 生态集成与配置 (开箱即用 · 零手动配置)
 
-### 1. Pi Agent 扩展配置 (`extensions/pi`)
+> 🚀 **一键傻瓜式设计**：当启动 `AgentFloat.app` 或运行 `agentfloat setup` 时，系统会自动检测本机环境并无感完成全部挂载，**无需手动编辑任何配置文件**！
 
-AgentFloat 为 Pi Agent 提供了原生 TypeScript 扩展，能够自动监听生命周期事件（`agent_start`, `turn_end`, `agent_settled`）并推送给 AgentFloat。
+### 1. Codex 自动联动 (CLI 与 桌面版)
+- 启动应用时自动在 `~/.agentfloat/hooks/codex-notify.sh` 部署自包含 Hook，并自动配置到 `~/.codex/config.toml`。
+- 支持与官方 `ChatGPT.app` / Codex 桌面版内部客户端（`SkyComputerUseClient`）透明链式透传。
 
-在 Pi 的插件/扩展目录引入该扩展：
-```typescript
-import extension, { activate } from './extensions/pi';
+### 2. Pi Agent 自动联动
+- 启动应用时自动将原生扩展安装至 `~/.pi/agent/extensions/agentfloat.ts`，Pi 启动时自动加载并上报生命周期。
 
-export default extension;
-export { activate };
-```
-扩展将自动读取 `~/.agentfloat/auth_token` 并将事件推送到 `http://127.0.0.1:41920/api/events`。
-
-### 2. Codex (CLI & 桌面版) 配置 (`scripts/codex-notify.sh`)
-
-Codex CLI 与官方 Codex 桌面版（基于 `ChatGPT.app` / `codex app-server`）均支持在轮次完成后触发通知脚本。将 `scripts/codex-notify.sh` 配置到 Codex 中：
-
-在 `~/.codex/config.toml` 中配置（推荐）：
-```toml
-notify = ["/path/to/AgentFloat/scripts/codex-notify.sh", "turn-ended"]
-```
-
-或在 `~/.codex/config.json` 中配置：
-```json
-{
-  "notify": "/path/to/AgentFloat/scripts/codex-notify.sh"
-}
-```
-
-也可以在 Codex CLI 启动参数中指定：
+### 3. 一键检测与修复
+若后续新安装了 Codex 或 Pi，可在系统菜单栏点击 **「重新检测」**，或在终端随时运行：
 ```bash
-codex --notify /path/to/AgentFloat/scripts/codex-notify.sh
-```
-
-> 💡 **桌面版兼容说明**：脚本内置透明链式转发，会自动保持与系统 `SkyComputerUseClient` 等下游客户端的透传，绝不破坏 Codex 桌面版内部通信；同时支持卡片一键聚焦置顶 Codex 桌面端与终端窗口。
-
-测试 Codex 通知脚本：
-```bash
-./scripts/codex-notify.sh '{"thread-id":"th-1","turn-id":"tu-1","cwd":"/path/to/project","last-assistant-message":"Refactoring completed","status":"completed"}'
+agentfloat setup
 ```
 
 ---

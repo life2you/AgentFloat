@@ -90,18 +90,31 @@ public struct MenuBarView: View {
             Divider()
             
             // 底部操作栏
-            HStack {
-                Text("零云端依赖 · 本地安全")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+            HStack(spacing: 8) {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 5, height: 5)
+                    Text("自动联动: Codex & Pi")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
                 
                 Spacer()
                 
-                Button("退出 AgentFloat") {
+                Button("重新检测") {
+                    _ = AutoIntegrationManager.autoSetupAll()
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 10))
+                .foregroundColor(.accentColor)
+                .help("重新检测并修复本地 Codex 与 Pi Agent 联动配置")
+                
+                Button("退出") {
                     NSApp.terminate(nil)
                 }
                 .buttonStyle(.bordered)
-                .controlSize(.small)
+                .controlSize(.mini)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)

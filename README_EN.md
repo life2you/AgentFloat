@@ -43,8 +43,8 @@
   Native HTTP server binds strictly to `127.0.0.1` via `Network.framework` loopback interface. Automatically generates a 32-byte secure token stored at `~/.agentfloat/auth_token` with strict POSIX `0600` permissions.
 - 🗄 **Concurrent SQLite Storage (`SQLiteTaskStore`)**:
   Actor-isolated native SQLite3 C API wrapper with WAL mode and unique deduplication index `(source, session_id, turn_id)` to prevent notification storms from duplicate webhooks or retries.
-- 🧩 **Ecosystem Ready**:
-  Out-of-the-box integration for **Pi Agent Extension**, **Codex CLI Hook**, and a feature-complete `agentfloat` command-line utility.
+- 🧩 **Zero-Configuration Ecosystem Integration**:
+  Turnkey out-of-the-box! Upon launch, AgentFloat automatically detects local installations of **Codex (CLI & Desktop)** and **Pi Agent**, seamlessly configuring notification hooks and extensions with zero manual setup.
 
 ---
 
@@ -154,47 +154,21 @@ agentfloat health
 
 ---
 
-## 🔌 Ecosystem Integrations
+## 🔌 Ecosystem Integration (Zero-Config · Out-of-the-Box)
 
-### 1. Pi Agent Extension (`extensions/pi`)
+> 🚀 **Turnkey Design**: Upon launching `AgentFloat.app` or running `agentfloat setup`, the system automatically detects local environments and seamlessly completes all integrations—**no manual config file editing required**!
 
-AgentFloat provides an official TypeScript extension for Pi Agent that listens to lifecycle events (`agent_start`, `turn_end`, `agent_settled`) and forwards them to the desktop HUD.
+### 1. Codex Automatic Integration (CLI & Desktop)
+- Deploys a self-contained hook to `~/.agentfloat/hooks/codex-notify.sh` and automatically mounts it into `~/.codex/config.toml`.
+- Supports transparent notification chaining with official desktop clients (such as `SkyComputerUseClient`).
 
-Import the extension into your Pi configuration:
-```typescript
-import extension, { activate } from './extensions/pi';
+### 2. Pi Agent Automatic Integration
+- Automatically installs the native extension to `~/.pi/agent/extensions/agentfloat.ts`, automatically loaded by Pi across all workspaces.
 
-export default extension;
-export { activate };
-```
-The extension automatically reads `~/.agentfloat/auth_token` and communicates with `http://127.0.0.1:41920/api/events`.
-
-### 2. Codex (CLI & Desktop) Configuration (`scripts/codex-notify.sh`)
-
-Both Codex CLI and the official Codex Desktop app (powered by `ChatGPT.app` / `codex app-server`) execute notification hooks upon turn completion. Configure `scripts/codex-notify.sh`:
-
-In `~/.codex/config.toml` (Recommended):
-```toml
-notify = ["/path/to/AgentFloat/scripts/codex-notify.sh", "turn-ended"]
-```
-
-Or configure in `~/.codex/config.json`:
-```json
-{
-  "notify": "/path/to/AgentFloat/scripts/codex-notify.sh"
-}
-```
-
-Or pass via Codex CLI flags:
+### 3. One-Click Verification & Repair
+If you install Codex or Pi later, click **"Re-detect"** in the macOS menu bar popover, or run anytime in terminal:
 ```bash
-codex --notify /path/to/AgentFloat/scripts/codex-notify.sh
-```
-
-> 💡 **Desktop Compatibility**: The script includes built-in transparent notification chaining to downstream clients (such as `SkyComputerUseClient`), preserving internal Codex Desktop app communications while enabling AgentFloat HUD alerts and one-click app focus.
-
-Test manually:
-```bash
-./scripts/codex-notify.sh '{"thread-id":"th-1","turn-id":"tu-1","cwd":"/path/to/project","last-assistant-message":"Refactoring completed","status":"completed"}'
+agentfloat setup
 ```
 
 ---

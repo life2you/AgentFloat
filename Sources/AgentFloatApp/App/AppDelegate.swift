@@ -52,6 +52,14 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             try server.start()
             self.httpServer = server
             
+            // 自动检测并无感接入本地 Agent 生态 (Codex 与 Pi Agent 零配置一键直连)
+            Task.detached(priority: .utility) {
+                let status = AutoIntegrationManager.autoSetupAll()
+                for msg in status.messages {
+                    print("[AutoIntegration] \(msg)")
+                }
+            }
+            
             // 初始加载历史任务
             Task {
                 await manager.loadTasks()
