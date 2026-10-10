@@ -186,18 +186,23 @@ public struct MenuBarView: View {
                 .font(.system(size: 10.5))
                 .foregroundColor(.accentColor)
                 
-                Button(target.actionTitle) {
+                Button(action: {
                     TerminalLauncher.activate(
                         cwd: task.cwd,
                         preferredApp: task.terminalApp,
                         sessionId: task.sessionId,
                         source: task.source
                     )
+                    Task {
+                        try? await taskManager.resolveTask(id: task.id)
+                    }
+                }) {
+                    Image(systemName: target.actionIconName)
+                        .font(.system(size: 9.5, weight: .bold))
+                        .foregroundColor(.accentColor)
                 }
                 .buttonStyle(.borderless)
-                .font(.system(size: 10.5))
-                .foregroundColor(.accentColor)
-                .help(target.actionHelp)
+                .help("\(target.actionHelp)并标记为已确认")
                 
                 Spacer()
                 

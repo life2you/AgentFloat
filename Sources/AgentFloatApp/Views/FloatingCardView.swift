@@ -171,20 +171,21 @@ private struct UltraCompactTaskRow: View {
                             sessionId: task.sessionId,
                             source: task.source
                         )
-                    }) {
-                        HStack(spacing: 2) {
-                            Image(systemName: target.actionIconName)
-                            Text(target.actionTitle)
+                        Task {
+                            try? await taskManager.resolveTask(id: task.id)
                         }
-                        .font(.system(size: 9.5, weight: .medium))
-                        .padding(.vertical, 3)
-                        .padding(.horizontal, 6)
-                        .background(Color.secondary.opacity(0.18))
-                        .cornerRadius(4)
-                        .contentShape(Rectangle())
+                    }) {
+                        Image(systemName: target.actionIconName)
+                            .font(.system(size: 9.5, weight: .bold))
+                            .foregroundColor(.primary)
+                            .padding(.vertical, 3)
+                            .padding(.horizontal, 6)
+                            .background(Color.secondary.opacity(0.18))
+                            .cornerRadius(4)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .help(target.actionHelp)
+                    .help("\(target.actionHelp)并标记为已确认")
                     
                     Button(action: {
                         Task {
