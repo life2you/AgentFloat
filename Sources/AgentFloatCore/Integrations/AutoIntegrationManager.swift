@@ -56,7 +56,7 @@ public struct AutoIntegrationManager: Sendable {
     fi
 
     NORMALIZED_PAYLOAD=$(RAW_PAYLOAD="${PAYLOAD}" python3 - <<'EOF' 2>/dev/null || echo ""
-    import os, sys, json
+    import os, sys, json, sqlite3
 
     raw = os.environ.get("RAW_PAYLOAD", "").strip()
     try:
@@ -70,7 +70,41 @@ public struct AutoIntegrationManager: Sendable {
     msg = data.get("last_assistant_message") or data.get("last-assistant-message") or data.get("lastAssistantMessage") or data.get("message") or ""
     status = data.get("status") or "completed"
     error = data.get("error") or ""
-    term_app = data.get("terminal_app") or os.environ.get("TERM_PROGRAM") or ""
+
+    # 1. 过滤内部子任务 / 标题生成 Turn
+    raw_msg = str(msg or "").strip()
+    if raw_msg.startswith("{") and raw_msg.endswith("}"):
+        try:
+            parsed = json.loads(raw_msg)
+            if isinstance(parsed, dict) and "title" in parsed and ("description" in parsed or len(parsed) <= 3):
+                print("IGNORE")
+                sys.exit(0)
+        except Exception:
+            pass
+
+    # 2. 识别发起客户端 (Originator): 优先从 ~/.codex/state_5.sqlite 中查询 thread 来源
+    originator = data.get("originator") or ""
+    if not originator and thread_id:
+        try:
+            db_path = os.path.expanduser("~/.codex/state_5.sqlite")
+            if os.path.exists(db_path):
+                conn = sqlite3.connect(db_path, timeout=1.0)
+                c = conn.cursor()
+                c.execute("SELECT originator FROM threads WHERE id = ? LIMIT 1", (thread_id,))
+                row = c.fetchone()
+                if row and row[0]:
+                    originator = row[0]
+                conn.close()
+        except Exception:
+            pass
+
+    # 3. 精准判断终端还是桌面应用
+    term_app = data.get("terminal_app") or ""
+    if not term_app:
+        if "desktop" in originator.lower():
+            term_app = "codex"
+        else:
+            term_app = os.environ.get("TERM_PROGRAM") or "codex"
 
     if error or "fail" in str(status).lower() or "err" in str(status).lower():
         norm_status = "error"
@@ -104,8 +138,14 @@ public struct AutoIntegrationManager: Sendable {
     EOF
     )
 
-    if [ -z "${NORMALIZED_PAYLOAD}" ]; then
-        NORMALIZED_PAYLOAD="{\\"last_assistant_message\\":\\"Codex 执行结束\\",\\"status\\":\\"completed\\"}"
+    if [ -z "${NORMALIZED_PAYLOAD}" ] || [ "${NORMALIZED_PAYLOAD}" = "IGNORE" ]; then
+        SKY_CLIENT="${HOME}/.codex/computer-use/Codex Computer Use.app/Contents/SharedSupport/SkyComputerUseClient.app/Contents/MacOS/SkyComputerUseClient"
+        if [ -n "${CODEX_CHAIN_NOTIFY:-}" ] && [ -x "${CODEX_CHAIN_NOTIFY}" ]; then
+            "${CODEX_CHAIN_NOTIFY}" "$@" >/dev/null 2>&1 || true
+        elif [ -x "${SKY_CLIENT}" ]; then
+            "${SKY_CLIENT}" "$@" >/dev/null 2>&1 || true
+        fi
+        exit 0
     fi
 
     curl -s -X POST "${SERVER_URL}/api/codex/notify" \\

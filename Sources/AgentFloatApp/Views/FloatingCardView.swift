@@ -160,6 +160,8 @@ private struct UltraCompactTaskRow: View {
                 
                 Spacer(minLength: 4)
                 
+                let target = TerminalLauncher.detectActiveTerminal(preferred: task.terminalApp, source: task.source)
+                
                 // 按钮组直接内置于行内右侧
                 HStack(spacing: 4) {
                     Button(action: {
@@ -171,8 +173,8 @@ private struct UltraCompactTaskRow: View {
                         )
                     }) {
                         HStack(spacing: 2) {
-                            Image(systemName: "terminal")
-                            Text("终端")
+                            Image(systemName: target.actionIconName)
+                            Text(target.actionTitle)
                         }
                         .font(.system(size: 9.5, weight: .medium))
                         .padding(.vertical, 3)
@@ -182,7 +184,7 @@ private struct UltraCompactTaskRow: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .help("激活当前终端窗口")
+                    .help(target.actionHelp)
                     
                     Button(action: {
                         Task {

@@ -36,4 +36,15 @@ struct TerminalLauncherTests {
         let detected = TerminalLauncher.detectActiveTerminal()
         #expect(SupportedTerminal.allCases.contains(detected))
     }
+    
+    @Test("终端与应用操作文案与图标适配")
+    func actionTitlesAndIcons() {
+        #expect(SupportedTerminal.codex.actionTitle == "应用")
+        #expect(SupportedTerminal.codex.actionIconName == "macwindow")
+        #expect(!SupportedTerminal.codex.isTerminal)
+        
+        #expect(SupportedTerminal.ghostty.actionTitle == "终端")
+        #expect(SupportedTerminal.ghostty.actionIconName == "terminal")
+        #expect(SupportedTerminal.ghostty.isTerminal)
+    }
 }

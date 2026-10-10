@@ -152,6 +152,8 @@ public struct MenuBarView: View {
                     .truncationMode(.middle)
             }
             
+            let target = TerminalLauncher.detectActiveTerminal(preferred: task.terminalApp, source: task.source)
+            
             HStack(spacing: 6) {
                 Button("显示卡片") {
                     taskManager.showCard(for: task)
@@ -160,7 +162,7 @@ public struct MenuBarView: View {
                 .font(.system(size: 10.5))
                 .foregroundColor(.accentColor)
                 
-                Button("终端") {
+                Button(target.actionTitle) {
                     TerminalLauncher.activate(
                         cwd: task.cwd,
                         preferredApp: task.terminalApp,
@@ -171,6 +173,7 @@ public struct MenuBarView: View {
                 .buttonStyle(.borderless)
                 .font(.system(size: 10.5))
                 .foregroundColor(.accentColor)
+                .help(target.actionHelp)
                 
                 Spacer()
                 

@@ -2,6 +2,15 @@
 
 所有重要的项目演进与版本更迭均记录于此。遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 规范。
 
+## [1.0.5] - 2026-10-10
+
+### 优化与深度适配 (Improved & Fixed)
+- **Codex 桌面版精准会话定位与无感过滤**:
+  - `TerminalLauncher` 深度支持 `codex://threads/<thread_id>` 协议，悬浮卡片点击「应用」按钮可直达定位至该任务对应的具体会话，无需手动从历史列表查找。
+  - 按钮文案与图标自适应：Codex 桌面任务自动显示 `[macwindow] 应用`，终端任务显示 `[terminal] 终端`。
+  - 智能过滤 Codex 内部元数据/标题生成等后台子任务（`{"title": ...}`），避免出现额外的虚假悬浮通知。
+  - 优化 Originator 识别逻辑，彻底解决后台 daemon 继承终端环境变量导致误唤醒终端的缺陷。
+
 ## [1.0.4] - 2026-10-10
 
 ### 新增与优化 (Added & Improved)

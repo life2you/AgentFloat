@@ -27,6 +27,46 @@ public enum SupportedTerminal: String, CaseIterable, Sendable {
         case .codex: return "Codex"
         }
     }
+
+    /// 是否为传统终端仿真器
+    public var isTerminal: Bool {
+        switch self {
+        case .codex:
+            return false
+        default:
+            return true
+        }
+    }
+
+    /// 悬浮卡片与菜单栏中的跳转按钮文案
+    public var actionTitle: String {
+        switch self {
+        case .codex:
+            return "应用"
+        default:
+            return "终端"
+        }
+    }
+
+    /// 按钮对应图标
+    public var actionIconName: String {
+        switch self {
+        case .codex:
+            return "macwindow"
+        default:
+            return "terminal"
+        }
+    }
+
+    /// 悬停提示文案
+    public var actionHelp: String {
+        switch self {
+        case .codex:
+            return "跳转至 Codex 桌面应用"
+        default:
+            return "激活当前终端窗口"
+        }
+    }
     
     public static func from(identifier: String?) -> SupportedTerminal? {
         guard let id = identifier?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty else {
@@ -57,9 +97,11 @@ public struct TerminalLauncher: Sendable {
         
         let runningBundles = Set(NSWorkspace.shared.runningApplications.compactMap { $0.bundleIdentifier })
         
-        // 若来源是 Codex 且未明确指定终端，如果 Codex 桌面版正在运行，优先置顶 Codex 桌面应用
-        if source == "codex" && runningBundles.contains(SupportedTerminal.codex.rawValue) {
-            return .codex
+        // 若来源是 Codex 且未明确指定终端：优先置顶 Codex 桌面应用
+        if source == "codex" && (preferred == nil || preferred?.isEmpty == true || preferred?.contains("codex") == true) {
+            if runningBundles.contains(SupportedTerminal.codex.rawValue) || isInstalled(terminal: .codex) {
+                return .codex
+            }
         }
         
         for candidate: SupportedTerminal in [.ghostty, .otty, .warp, .wezterm, .alacritty, .cursor, .vscode, .iterm2, .terminal] {
@@ -91,6 +133,29 @@ public struct TerminalLauncher: Sendable {
     ) -> Bool {
         let target = detectActiveTerminal(preferred: preferredApp, source: source)
         let bundleId = target.rawValue
+        
+        // 0. 如果目标是 Codex 桌面端，优先通过 codex://threads/ 深度链接精准跳转至对应会话，并置顶应用
+        if target == .codex {
+            if let threadId = sessionId, !threadId.isEmpty {
+                let deepLink = "codex://threads/\(threadId)"
+                if let url = URL(string: deepLink) {
+                    let config = NSWorkspace.OpenConfiguration()
+                    config.activates = true
+                    NSWorkspace.shared.open(url, configuration: config, completionHandler: nil)
+                    
+                    let proc = Process()
+                    proc.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+                    proc.arguments = [deepLink]
+                    if (try? proc.run()) != nil {
+                        proc.waitUntilExit()
+                    }
+                    
+                    bringToFront(bundleId: bundleId)
+                    return true
+                }
+            }
+            return bringToFront(bundleId: bundleId)
+        }
         
         // 1. 如果目标终端是 Otty，优先通过 otty-cli 精确聚焦对应 Pane 与窗口
         if target == .otty {
