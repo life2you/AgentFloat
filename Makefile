@@ -1,4 +1,4 @@
-.PHONY: all build release test app package install-cli clean run-app help
+.PHONY: all build release test app package install-cli clean run-app icon help
 
 PREFIX ?= /usr/local
 
@@ -9,6 +9,7 @@ help:
 	@echo "  make build        - 调试模式编译全部 Target"
 	@echo "  make release      - Release 模式编译"
 	@echo "  make test         - 执行单元测试"
+	@echo "  make icon         - 生成高清应用图标 (PNG & ICNS)"
 	@echo "  make app          - 打包生成 build/AgentFloat.app"
 	@echo "  make package      - 打包生成 dist/ 目录下的 Release zip 与 sha256"
 	@echo "  make run-app      - 打包并启动 AgentFloat.app"
@@ -23,6 +24,9 @@ release:
 
 test:
 	swift test
+
+icon:
+	@uv run --with pillow python3 scripts/generate-app-icon.py
 
 app:
 	./scripts/build-app.sh release

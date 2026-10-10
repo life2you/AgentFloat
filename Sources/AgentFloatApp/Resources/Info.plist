@@ -6,6 +6,8 @@
     <string>com.agentfloat.AgentFloatApp</string>
     <key>CFBundleExecutable</key>
     <string>AgentFloatApp</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleName</key>
     <string>AgentFloat</string>
     <key>CFBundleDisplayName</key>

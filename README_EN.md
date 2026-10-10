@@ -1,6 +1,8 @@
 # AgentFloat
 
 <p align="center">
+  <img src="assets/appicon/AppIcon-1024.png" width="128" height="128" alt="AgentFloat Icon" />
+  <br />
   <b>A Lightweight, Always-On-Top Desktop Floating HUD for AI Coding Agent Turn Notifications and Task Tracking on macOS</b>
   <br />
   <i>Zero External Dependencies · Pure Swift 6 & SwiftUI · Local Loopback 127.0.0.1 Only · Never Equate Turn Completion with Code Verification</i>

@@ -36,6 +36,12 @@ if [ -f "Sources/AgentFloatApp/Resources/Info.plist" ]; then
     cp "Sources/AgentFloatApp/Resources/Info.plist" "${APP_BUNDLE}/Contents/Info.plist"
 fi
 
+if [ -f "assets/appicon/AppIcon.icns" ]; then
+    cp "assets/appicon/AppIcon.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
+elif [ -f "Sources/AgentFloatApp/Resources/AppIcon.icns" ]; then
+    cp "Sources/AgentFloatApp/Resources/AppIcon.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
+fi
+
 # Ad-hoc 代码签名
 if command -v codesign &>/dev/null; then
     echo "🔏 正在进行本地签名 (ad-hoc)..."

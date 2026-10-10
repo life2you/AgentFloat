@@ -1,6 +1,8 @@
 # AgentFloat
 
 <p align="center">
+  <img src="assets/appicon/AppIcon-1024.png" width="128" height="128" alt="AgentFloat Icon" />
+  <br />
   <b>专注于 AI Coding Agent 轮次结束与任务追踪的 macOS 桌面置顶悬浮提醒器</b>
   <br />
   <i>零外部第三方依赖 · 原生 Swift 6 & SwiftUI · 纯本地 127.0.0.1 环回通信 · 严禁将任务结束等同于代码验证通过</i>

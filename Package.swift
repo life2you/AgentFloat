@@ -31,7 +31,7 @@ let package = Package(
             name: "AgentFloatApp",
             dependencies: ["AgentFloatCore"],
             path: "Sources/AgentFloatApp",
-            exclude: ["Resources/Info.plist"]
+            exclude: ["Resources"]
         ),
         .executableTarget(
             name: "AgentFloatCLI",
