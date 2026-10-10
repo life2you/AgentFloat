@@ -4,6 +4,7 @@ import AgentFloatCore
 
 public struct MenuBarView: View {
     @ObservedObject public var taskManager: TaskManager
+    @ObservedObject private var launchAtLogin = LaunchAtLoginManager.shared
     public let serverPort: UInt16
     
     public init(taskManager: TaskManager, serverPort: UInt16 = 41920) {
@@ -89,18 +90,27 @@ public struct MenuBarView: View {
             
             Divider()
             
-            // 底部操作栏
+            // 设置与环境联动控制栏
             HStack(spacing: 8) {
+                Toggle(isOn: Binding(
+                    get: { launchAtLogin.isEnabled },
+                    set: { launchAtLogin.set(enabled: $0) }
+                )) {
+                    Text("开机自启动")
+                        .font(.system(size: 11))
+                }
+                .toggleStyle(.checkbox)
+                
+                Spacer()
+                
                 HStack(spacing: 4) {
                     Circle()
                         .fill(Color.green)
                         .frame(width: 5, height: 5)
-                    Text("自动联动: Codex & Pi")
+                    Text("自动联动")
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                 }
-                
-                Spacer()
                 
                 Button("重新检测") {
                     _ = AutoIntegrationManager.autoSetupAll()
@@ -109,12 +119,26 @@ public struct MenuBarView: View {
                 .font(.system(size: 10))
                 .foregroundColor(.accentColor)
                 .help("重新检测并修复本地 Codex 与 Pi Agent 联动配置")
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+            
+            Divider()
+            
+            // 底部操作栏
+            HStack {
+                Text("零云端依赖 · 本地安全")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
                 
-                Button("退出") {
+                Spacer()
+                
+                Button("退出 AgentFloat") {
                     NSApp.terminate(nil)
                 }
                 .buttonStyle(.bordered)
-                .controlSize(.mini)
+                .controlSize(.small)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)

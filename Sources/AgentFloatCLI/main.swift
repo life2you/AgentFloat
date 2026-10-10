@@ -43,6 +43,7 @@ struct AgentFloatCLI {
 
           resolve <id>       标记指定任务为已处理
           setup              一键自动检测并配置本地 Codex 与 Pi Agent 联动
+          autostart [on/off] 查看或设置开机自启动
           token              查看当前本地鉴权 Token
           health             检测 AgentFloat 服务健康状态
           help, -h, --help   显示本帮助信息
@@ -383,6 +384,25 @@ struct AgentFloatCLI {
         }
     }
 
+    @MainActor
+    static func handleAutostart(args: [String]) async {
+        let manager = LaunchAtLoginManager.shared
+        if let action = args.first?.lowercased() {
+            switch action {
+            case "enable", "on", "true", "1":
+                manager.set(enabled: true)
+                print("✅ 已开启开机自启动 (当前状态: \(manager.statusDescription))")
+            case "disable", "off", "false", "0":
+                manager.set(enabled: false)
+                print("✅ 已关闭开机自启动 (当前状态: \(manager.statusDescription))")
+            default:
+                print("用法: agentfloat autostart [on|off]")
+            }
+        } else {
+            print("开机自启动状态: \(manager.statusDescription) (\(manager.isEnabled ? "已开启" : "未开启"))")
+        }
+    }
+
     static func main() async {
         let args = Array(CommandLine.arguments.dropFirst())
 
@@ -406,6 +426,8 @@ struct AgentFloatCLI {
             await handleResolve(args: subArgs)
         case "setup":
             handleSetup(args: subArgs)
+        case "autostart":
+            await handleAutostart(args: subArgs)
         case "token":
             handleToken()
         case "health":

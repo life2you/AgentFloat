@@ -2,6 +2,14 @@
 
 所有重要的项目演进与版本更迭均记录于此。遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 规范。
 
+## [1.0.6] - 2026-10-10
+
+### 新增特性 (Added)
+- **开机自启动勾选设置 (Launch at Login)**:
+  - 核心模块新增 `LaunchAtLoginManager`，双轨支持现代 macOS `SMAppService` API 与系统登录项兜底机制。
+  - 菜单栏 Popover 面板新增原生的 **「开机自启动」** 勾选框，状态实时同步 macOS「系统设置 → 登录项」。
+  - 命令行工具支持 `agentfloat autostart [on/off]` 快速查看和切换开机自启动。
+
 ## [1.0.5] - 2026-10-10
 
 ### 优化与深度适配 (Improved & Fixed)
