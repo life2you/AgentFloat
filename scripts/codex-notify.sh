@@ -58,6 +58,16 @@ elif "abort" in str(status).lower() or "cancel" in str(status).lower():
 else:
     norm_status = "completed"
 
+msg_snippet = ""
+if msg:
+    first_line = str(msg).strip().split("\n")[0].strip()
+    if len(first_line) > 35:
+        msg_snippet = first_line[:32] + "..."
+    else:
+        msg_snippet = first_line
+
+final_title = data.get("title") or (f"Codex: {msg_snippet}" if msg_snippet else "Codex 执行完成")
+
 output = {
     "thread_id": thread_id,
     "turn_id": turn_id,
@@ -66,7 +76,7 @@ output = {
     "status": norm_status,
     "error": error if error else None,
     "terminal_app": term_app,
-    "title": "Codex Turn 执行结束"
+    "title": final_title
 }
 
 print(json.dumps(output))

@@ -169,12 +169,13 @@ export { activate };
 ```
 The extension automatically reads `~/.agentfloat/auth_token` and communicates with `http://127.0.0.1:41920/api/events`.
 
-### 2. Codex CLI (`scripts/codex-notify.sh`)
+### 2. Codex (CLI & Desktop) Configuration (`scripts/codex-notify.sh`)
 
-Codex CLI supports external notification scripts upon turn completion. Configure `scripts/codex-notify.sh`:
+Both Codex CLI and the official Codex Desktop app (powered by `ChatGPT.app` / `codex app-server`) execute notification hooks upon turn completion. Configure `scripts/codex-notify.sh`:
 
-```bash
-codex --notify /path/to/AgentFloat/scripts/codex-notify.sh
+In `~/.codex/config.toml` (Recommended):
+```toml
+notify = ["/path/to/AgentFloat/scripts/codex-notify.sh", "turn-ended"]
 ```
 
 Or configure in `~/.codex/config.json`:
@@ -183,6 +184,13 @@ Or configure in `~/.codex/config.json`:
   "notify": "/path/to/AgentFloat/scripts/codex-notify.sh"
 }
 ```
+
+Or pass via Codex CLI flags:
+```bash
+codex --notify /path/to/AgentFloat/scripts/codex-notify.sh
+```
+
+> 💡 **Desktop Compatibility**: The script includes built-in transparent notification chaining to downstream clients (such as `SkyComputerUseClient`), preserving internal Codex Desktop app communications while enabling AgentFloat HUD alerts and one-click app focus.
 
 Test manually:
 ```bash

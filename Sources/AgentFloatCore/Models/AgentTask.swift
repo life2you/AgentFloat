@@ -9,7 +9,7 @@ public enum TaskSource: String, Codable, Sendable, CaseIterable {
     public var displayName: String {
         switch self {
         case .pi: return "Pi Agent"
-        case .codex: return "Codex CLI"
+        case .codex: return "Codex"
         case .custom: return "Custom"
         }
     }

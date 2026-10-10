@@ -11,6 +11,7 @@ public enum SupportedTerminal: String, CaseIterable, Sendable {
     case alacritty = "org.alacritty"
     case vscode = "com.microsoft.VSCode"
     case cursor = "com.todesktop.230313mzl4w4u92"
+    case codex = "com.openai.codex"
     
     public var displayName: String {
         switch self {
@@ -23,6 +24,7 @@ public enum SupportedTerminal: String, CaseIterable, Sendable {
         case .alacritty: return "Alacritty"
         case .vscode: return "VS Code"
         case .cursor: return "Cursor"
+        case .codex: return "Codex"
         }
     }
     
@@ -38,6 +40,7 @@ public enum SupportedTerminal: String, CaseIterable, Sendable {
         if id.contains("alacritty") { return .alacritty }
         if id.contains("cursor") { return .cursor }
         if id.contains("vscode") || id == "code" { return .vscode }
+        if id.contains("codex") || id.contains("chatgpt") || id.contains("openai") { return .codex }
         if id.contains("terminal") || id.contains("apple") { return .terminal }
         return nil
     }
@@ -45,14 +48,20 @@ public enum SupportedTerminal: String, CaseIterable, Sendable {
 
 public struct TerminalLauncher: Sendable {
     
-    /// 获取当前系统中可用或正在运行的终端
-    public static func detectActiveTerminal(preferred: String? = nil) -> SupportedTerminal {
+    /// 获取当前系统中可用或正在运行的终端或 Agent 客户端
+    public static func detectActiveTerminal(preferred: String? = nil, source: String? = nil) -> SupportedTerminal {
         if let preferredTerm = SupportedTerminal.from(identifier: preferred),
            isInstalled(terminal: preferredTerm) {
             return preferredTerm
         }
         
         let runningBundles = Set(NSWorkspace.shared.runningApplications.compactMap { $0.bundleIdentifier })
+        
+        // 若来源是 Codex 且未明确指定终端，如果 Codex 桌面版正在运行，优先置顶 Codex 桌面应用
+        if source == "codex" && runningBundles.contains(SupportedTerminal.codex.rawValue) {
+            return .codex
+        }
+        
         for candidate: SupportedTerminal in [.ghostty, .otty, .warp, .wezterm, .alacritty, .cursor, .vscode, .iterm2, .terminal] {
             if runningBundles.contains(candidate.rawValue) {
                 return candidate
@@ -72,7 +81,7 @@ public struct TerminalLauncher: Sendable {
         return NSWorkspace.shared.urlForApplication(withBundleIdentifier: terminal.rawValue) != nil
     }
     
-    /// 激活终端：精确定位并切换至该任务对应的 Tab/Pane/窗口，并置顶终端，绝不打开多余的新 Tab 页
+    /// 激活终端或客户端：精确定位并切换至该任务对应的 Tab/Pane/窗口，并置顶终端，绝不打开多余的新 Tab 页
     @discardableResult
     public static func activate(
         cwd: String?,
@@ -80,7 +89,7 @@ public struct TerminalLauncher: Sendable {
         sessionId: String? = nil,
         source: String? = nil
     ) -> Bool {
-        let target = detectActiveTerminal(preferred: preferredApp)
+        let target = detectActiveTerminal(preferred: preferredApp, source: source)
         let bundleId = target.rawValue
         
         // 1. 如果目标终端是 Otty，优先通过 otty-cli 精确聚焦对应 Pane 与窗口

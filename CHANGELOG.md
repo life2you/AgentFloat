@@ -2,6 +2,15 @@
 
 所有重要的项目演进与版本更迭均记录于此。遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 规范。
 
+## [1.0.3] - 2026-10-10
+
+### 新增与优化 (Added & Improved)
+- **Codex 桌面版深度兼容**:
+  - 全面支持 OpenAI 官方 Codex 桌面版（基于 `com.openai.codex` / `ChatGPT.app` 与 `codex app-server`）。
+  - `TerminalLauncher` 原生集成 `com.openai.codex`，在悬浮卡片中点击激活按钮可一键智能置顶唤醒 Codex 桌面端窗口。
+  - `scripts/codex-notify.sh` 优化任务标题提取，自动从 `last_assistant_message` 提炼直观的操作摘要。
+  - 文档补充 `~/.codex/config.toml` 配置示例与透明链式转发机制说明。
+
 ## [1.0.2] - 2026-10-10
 
 ### 修复与优化 (Fixed & Improved)

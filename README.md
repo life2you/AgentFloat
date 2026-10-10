@@ -169,21 +169,28 @@ export { activate };
 ```
 扩展将自动读取 `~/.agentfloat/auth_token` 并将事件推送到 `http://127.0.0.1:41920/api/events`。
 
-### 2. Codex CLI 配置 (`scripts/codex-notify.sh`)
+### 2. Codex (CLI & 桌面版) 配置 (`scripts/codex-notify.sh`)
 
-Codex CLI 支持在轮次完成后触发通知脚本。将 `scripts/codex-notify.sh` 配置到 Codex 中：
+Codex CLI 与官方 Codex 桌面版（基于 `ChatGPT.app` / `codex app-server`）均支持在轮次完成后触发通知脚本。将 `scripts/codex-notify.sh` 配置到 Codex 中：
 
-```bash
-# 在 Codex 配置文件或启动参数中指定通知脚本
-codex --notify /path/to/AgentFloat/scripts/codex-notify.sh
+在 `~/.codex/config.toml` 中配置（推荐）：
+```toml
+notify = ["/path/to/AgentFloat/scripts/codex-notify.sh", "turn-ended"]
 ```
 
-或在 `~/.codex/config.json`（依 Codex 实际配置路径为准）中配置：
+或在 `~/.codex/config.json` 中配置：
 ```json
 {
   "notify": "/path/to/AgentFloat/scripts/codex-notify.sh"
 }
 ```
+
+也可以在 Codex CLI 启动参数中指定：
+```bash
+codex --notify /path/to/AgentFloat/scripts/codex-notify.sh
+```
+
+> 💡 **桌面版兼容说明**：脚本内置透明链式转发，会自动保持与系统 `SkyComputerUseClient` 等下游客户端的透传，绝不破坏 Codex 桌面版内部通信；同时支持卡片一键聚焦置顶 Codex 桌面端与终端窗口。
 
 测试 Codex 通知脚本：
 ```bash
