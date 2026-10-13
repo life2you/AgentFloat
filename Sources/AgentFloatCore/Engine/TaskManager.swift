@@ -102,6 +102,94 @@ public struct CodexNotificationPayload: Codable, Sendable {
     }
 }
 
+/// Claude CLI 传入的通知载荷
+public struct ClaudeNotificationPayload: Codable, Sendable {
+    public var sessionId: String?
+    public var turnId: String?
+    public var cwd: String?
+    public var lastAssistantMessage: String?
+    public var status: String?
+    public var error: String?
+    public var durationMs: Int?
+    public var title: String?
+    public var terminalApp: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case sessionId = "session_id"
+        case sessionIdAlt = "sessionId"
+        
+        case turnId = "turn_id"
+        case turnIdAlt = "turnId"
+        
+        case cwd
+        
+        case lastAssistantMessage = "last_assistant_message"
+        case lastAssistantMessageAlt = "lastAssistantMessage"
+        case message
+        
+        case status
+        case error
+        case durationMs = "duration_ms"
+        case durationMsAlt = "durationMs"
+        case title
+        case terminalApp = "terminal_app"
+        case terminalAppAlt = "terminalApp"
+    }
+    
+    public init(
+        sessionId: String? = nil,
+        turnId: String? = nil,
+        cwd: String? = nil,
+        lastAssistantMessage: String? = nil,
+        status: String? = nil,
+        error: String? = nil,
+        durationMs: Int? = nil,
+        title: String? = nil,
+        terminalApp: String? = nil
+    ) {
+        self.sessionId = sessionId
+        self.turnId = turnId
+        self.cwd = cwd
+        self.lastAssistantMessage = lastAssistantMessage
+        self.status = status
+        self.error = error
+        self.durationMs = durationMs
+        self.title = title
+        self.terminalApp = terminalApp
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.sessionId = try container.decodeIfPresent(String.self, forKey: .sessionId)
+            ?? container.decodeIfPresent(String.self, forKey: .sessionIdAlt)
+        self.turnId = try container.decodeIfPresent(String.self, forKey: .turnId)
+            ?? container.decodeIfPresent(String.self, forKey: .turnIdAlt)
+        self.cwd = try container.decodeIfPresent(String.self, forKey: .cwd)
+        self.lastAssistantMessage = try container.decodeIfPresent(String.self, forKey: .lastAssistantMessage)
+            ?? container.decodeIfPresent(String.self, forKey: .lastAssistantMessageAlt)
+            ?? container.decodeIfPresent(String.self, forKey: .message)
+        self.status = try container.decodeIfPresent(String.self, forKey: .status)
+        self.error = try container.decodeIfPresent(String.self, forKey: .error)
+        self.durationMs = try container.decodeIfPresent(Int.self, forKey: .durationMs)
+            ?? container.decodeIfPresent(Int.self, forKey: .durationMsAlt)
+        self.title = try container.decodeIfPresent(String.self, forKey: .title)
+        self.terminalApp = try container.decodeIfPresent(String.self, forKey: .terminalApp)
+            ?? container.decodeIfPresent(String.self, forKey: .terminalAppAlt)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(sessionId, forKey: .sessionId)
+        try container.encodeIfPresent(turnId, forKey: .turnId)
+        try container.encodeIfPresent(cwd, forKey: .cwd)
+        try container.encodeIfPresent(lastAssistantMessage, forKey: .lastAssistantMessage)
+        try container.encodeIfPresent(status, forKey: .status)
+        try container.encodeIfPresent(error, forKey: .error)
+        try container.encodeIfPresent(durationMs, forKey: .durationMs)
+        try container.encodeIfPresent(title, forKey: .title)
+    }
+}
+
 @MainActor
 public final class TaskManager: ObservableObject {
     public let store: SQLiteTaskStore
@@ -235,6 +323,47 @@ public final class TaskManager: ObservableObject {
             terminalApp: payload.terminalApp,
             durationMs: payload.durationMs,
             metadata: ["codex": "true"]
+        )
+    }
+    
+    /// 处理 Claude CLI notification
+    @discardableResult
+    public func ingestClaudeNotification(payload: ClaudeNotificationPayload) async throws -> AgentTask {
+        let sessionId = payload.sessionId?.isEmpty == false ? payload.sessionId! : UUID().uuidString
+        let turnId = payload.turnId?.isEmpty == false ? payload.turnId! : UUID().uuidString
+        let cwd = payload.cwd
+        
+        // 状态识别
+        let status: TaskStatus
+        let rawStatus = payload.status?.lowercased() ?? ""
+        if let err = payload.error, !err.isEmpty {
+            status = .error
+        } else if rawStatus.contains("abort") || rawStatus.contains("cancel") {
+            status = .aborted
+        } else if rawStatus.contains("err") || rawStatus.contains("fail") {
+            status = .error
+        } else if rawStatus.contains("success") || rawStatus.contains("complete") || rawStatus.isEmpty {
+            status = .completed
+        } else {
+            status = .unknown
+        }
+        
+        let title = payload.title?.isEmpty == false ? payload.title! : "Claude 执行完成"
+        let resultSummary = payload.lastAssistantMessage
+        
+        return try await ingestTask(
+            source: TaskSource.claude.rawValue,
+            sessionId: sessionId,
+            turnId: turnId,
+            title: title,
+            promptSummary: nil,
+            resultSummary: resultSummary,
+            status: status,
+            errorMessage: payload.error,
+            cwd: cwd,
+            terminalApp: payload.terminalApp,
+            durationMs: payload.durationMs,
+            metadata: ["claude": "true"]
         )
     }
     

@@ -2,6 +2,15 @@
 
 所有重要的项目演进与版本更迭均记录于此。遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 规范。
 
+## [1.0.9] - 2026-10-11
+
+### 新增与优化 (Added & Improved)
+- **Claude Code (CLI) 深度集成与零配置直连**:
+  - 原生支持 Anthropic 官方 Claude Code CLI，新增 `/api/claude/notify` 端点与 `TaskSource.claude` 任务标识。
+  - `AutoIntegrationManager` 自动检测 `~/.claude` 环境，无感部署 `claude-notify.sh` 并安全挂载至 `~/.claude/settings.json` 的 `hooks.Stop` 生命周期。
+  - CLI 工具扩展 `agentfloat claude-notify` 支持。
+  - 菜单栏 Popover 及 `agentfloat setup` 命令自动同步检测覆盖 Codex、Pi Agent 与 Claude CLI。
+
 ## [1.0.8] - 2026-10-10
 
 ### 优化与交互体验 (Improved)

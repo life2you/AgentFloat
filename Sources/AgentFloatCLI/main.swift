@@ -32,6 +32,7 @@ struct AgentFloatCLI {
             --terminal <app>   终端应用 (otty / ghostty / terminal / iterm2)
 
           codex-notify [json] 处理 Codex CLI notify 通知 (支持参数或 stdin)
+          claude-notify [json] 处理 Claude CLI notify 通知 (支持参数或 stdin)
           test               发送模拟测试卡片
             --success          模拟成功任务 (绿色)
             --error            模拟报错任务 (红色)
@@ -42,7 +43,7 @@ struct AgentFloatCLI {
             --pending          仅显示未处理任务 (默认)
 
           resolve <id>       标记指定任务为已处理
-          setup              一键自动检测并配置本地 Codex 与 Pi Agent 联动
+          setup              一键自动检测并配置本地 Codex、Pi Agent 与 Claude CLI 联动
           autostart [on/off] 查看或设置开机自启动
           token              查看当前本地鉴权 Token
           health             检测 AgentFloat 服务健康状态
@@ -290,6 +291,52 @@ struct AgentFloatCLI {
         }
     }
 
+    static func handleClaudeNotify(args: [String]) async {
+        var rawJson: String? = nil
+        
+        if let firstArg = args.first, !firstArg.isEmpty {
+            rawJson = firstArg
+        } else {
+            let stdinData = FileHandle.standardInput.readDataToEndOfFile()
+            if !stdinData.isEmpty {
+                rawJson = String(data: stdinData, encoding: .utf8)
+            }
+        }
+        
+        guard let jsonStr = rawJson?.trimmingCharacters(in: .whitespacesAndNewlines), !jsonStr.isEmpty else {
+            print("❌ 未提供 Claude notification JSON 数据。")
+            print("用法: agentfloat claude-notify '<json>' 或管道输入")
+            return
+        }
+        
+        guard let data = jsonStr.data(using: .utf8) else {
+            print("❌ JSON 编码解析失败")
+            return
+        }
+        
+        do {
+            let (code, respData) = try await sendHttpRequest(endpoint: "/api/claude/notify", method: "POST", body: data)
+            if code == 200 {
+                print("✅ Claude 通知已成功推送")
+            } else {
+                let msg = String(data: respData, encoding: .utf8) ?? ""
+                print("❌ 推送失败 HTTP \(code): \(msg)")
+            }
+        } catch {
+            print("⚠️ 本地服务未运行，正在直接解析写入数据库...")
+            do {
+                let decoder = JSONDecoder()
+                let payload = try decoder.decode(ClaudeNotificationPayload.self, from: data)
+                let store = try SQLiteTaskStore()
+                let manager = await TaskManager(store: store)
+                let task = try await manager.ingestClaudeNotification(payload: payload)
+                print("✅ Claude 任务已记录: \(task.title) (ID: \(task.id))")
+            } catch {
+                print("❌ 直写处理失败: \(error)")
+            }
+        }
+    }
+
     static func handleList(args: [String]) async {
         let showAll = args.contains("--all")
         let filter = showAll ? "all" : "pending"
@@ -377,10 +424,10 @@ struct AgentFloatCLI {
             print("  • \(msg)")
         }
         print("")
-        if status.codexConfigured || status.piConfigured {
-            print("✨ 配置完成！Codex 与 Pi Agent 轮次结束时将自动向 AgentFloat 悬浮窗上报任务。")
+        if status.codexConfigured || status.piConfigured || status.claudeConfigured {
+            print("✨ 配置完成！已检测到的 Agent（Codex / Pi / Claude）轮次结束时将自动向 AgentFloat 悬浮窗上报任务。")
         } else {
-            print("💡 未检测到本地已安装的 Codex (~/.codex) 或 Pi Agent (~/.pi/agent)。后续安装后启动 AgentFloat 即可自动连接。")
+            print("💡 未检测到本地已安装的 Codex (~/.codex)、Pi Agent (~/.pi/agent) 或 Claude CLI (~/.claude)。后续安装后启动 AgentFloat 即可自动连接。")
         }
     }
 
@@ -418,6 +465,8 @@ struct AgentFloatCLI {
             await handleEmit(args: subArgs)
         case "codex-notify":
             await handleCodexNotify(args: subArgs)
+        case "claude-notify":
+            await handleClaudeNotify(args: subArgs)
         case "test":
             await handleTest(args: subArgs)
         case "list":

@@ -4,12 +4,14 @@ import Foundation
 public enum TaskSource: String, Codable, Sendable, CaseIterable {
     case pi = "pi"
     case codex = "codex"
+    case claude = "claude"
     case custom = "custom"
     
     public var displayName: String {
         switch self {
         case .pi: return "Pi Agent"
         case .codex: return "Codex"
+        case .claude: return "Claude"
         case .custom: return "Custom"
         }
     }

@@ -44,7 +44,7 @@
 - 🗄 **高并发安全存储 (`SQLiteTaskStore`)**：
   原生 SQLite3 C API actor 封装，启用 WAL 模式与唯一去重索引 `(source, session_id, turn_id)`，天然防御 Webhook 重复推送或重试产生的通知风暴。
 - 🧩 **全生态接入与零配置直连**：
-  开箱即用！应用启动时自动检测本机安装的 **Codex (CLI & 桌面版)** 与 **Pi Agent**，并在后台全自动完成通知挂载与扩展安装，用户无需手动查找路径或编辑任何配置文件。
+  开箱即用！应用启动时自动检测本机安装的 **Codex (CLI & 桌面版)**、**Pi Agent** 与 **Claude Code (CLI)**，并在后台全自动完成通知挂载与扩展安装，用户无需手动查找路径或编辑任何配置文件。
 
 ---
 
@@ -70,7 +70,8 @@ AgentFloat
 │   └── main.swift                      # 调试、事件发送、任务列表与处理
 │
 ├── extensions/pi/                      # Pi Agent 官方扩展
-└── scripts/codex-notify.sh             # Codex CLI 通知适配脚本
+├── scripts/codex-notify.sh             # Codex CLI 通知适配脚本
+└── scripts/claude-notify.sh            # Claude Code (CLI) 通知适配脚本
 ```
 
 ---
@@ -165,8 +166,11 @@ agentfloat health
 ### 2. Pi Agent 自动联动
 - 启动应用时自动将原生扩展安装至 `~/.pi/agent/extensions/agentfloat.ts`，Pi 启动时自动加载并上报生命周期。
 
-### 3. 一键检测与修复
-若后续新安装了 Codex 或 Pi，可在系统菜单栏点击 **「重新检测」**，或在终端随时运行：
+### 3. Claude Code (CLI) 自动联动
+- 启动应用时自动在 `~/.agentfloat/hooks/claude-notify.sh` 部署自包含 Hook，并自动配置到 `~/.claude/settings.json` 的 `hooks.Stop` 生命周期。
+
+### 4. 一键检测与修复
+若后续新安装了 Codex、Pi 或 Claude，可在系统菜单栏点击 **「重新检测」**，或在终端随时运行：
 ```bash
 agentfloat setup
 ```
@@ -183,6 +187,7 @@ agentfloat setup
 | `GET` | `/api/health` | 健康检查（免鉴权） |
 | `POST` | `/api/events` | 发送通用任务事件 |
 | `POST` | `/api/codex/notify` | Codex CLI 专用通知接收 |
+| `POST` | `/api/claude/notify` | Claude CLI 专用通知接收 |
 | `POST` | `/api/test/emit` | 发送测试模拟卡片 |
 | `GET` | `/api/tasks` | 获取任务列表（支持 `?filter=pending` 或 `?filter=all`） |
 | `POST` | `/api/tasks/{id}/resolve` | 标记任务为已处理 |

@@ -94,5 +94,17 @@ struct LocalHttpServerTests {
         resReq.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         let (_, resResp) = try await URLSession.shared.data(for: resReq)
         #expect((resResp as? HTTPURLResponse)?.statusCode == 200)
+
+        // 6. Claude 通知接口测试 POST /api/claude/notify
+        let claudeUrl = URL(string: "http://127.0.0.1:\(testPort)/api/claude/notify")!
+        var claudeReq = URLRequest(url: claudeUrl)
+        claudeReq.httpMethod = "POST"
+        claudeReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        claudeReq.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        claudeReq.httpBody = "{\"session_id\":\"s_c1\",\"title\":\"Claude Done\",\"status\":\"completed\"}".data(using: .utf8)
+        let (claudeData, claudeResp) = try await URLSession.shared.data(for: claudeReq)
+        #expect((claudeResp as? HTTPURLResponse)?.statusCode == 200)
+        let claudeJson = try JSONSerialization.jsonObject(with: claudeData) as? [String: Any]
+        #expect(claudeJson?["taskId"] != nil)
     }
 }

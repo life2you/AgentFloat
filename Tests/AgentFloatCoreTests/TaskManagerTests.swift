@@ -74,6 +74,35 @@ struct TaskManagerTests {
         #expect(task.verificationNotice == "任务结束 · 请人工验证代码")
         #expect(manager.currentCardTask?.id == task.id)
     }
+
+    @Test("Claude 通知解析与摄取")
+    @MainActor
+    func claudeNotificationIngestion() async throws {
+        let (manager, path) = try createManager()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        
+        let payload = ClaudeNotificationPayload(
+            sessionId: "claude-session-999",
+            turnId: "turn-abc",
+            cwd: "/Users/dev/claude_app",
+            lastAssistantMessage: "Refactored user authentication.",
+            status: "completed",
+            error: nil,
+            durationMs: 4200,
+            title: "Claude: 登录重构",
+            terminalApp: "ghostty"
+        )
+        
+        let task = try await manager.ingestClaudeNotification(payload: payload)
+        #expect(task.source == "claude")
+        #expect(task.sessionId == "claude-session-999")
+        #expect(task.turnId == "turn-abc")
+        #expect(task.cwd == "/Users/dev/claude_app")
+        #expect(task.status == .completed)
+        #expect(task.verificationNotice == "任务结束 · 请人工验证代码")
+        #expect(task.terminalApp == "ghostty")
+        #expect(manager.currentCardTask?.id == task.id)
+    }
     
     @Test("卡片关闭与处理流程联动")
     @MainActor

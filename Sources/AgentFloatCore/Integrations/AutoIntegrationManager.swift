@@ -5,6 +5,8 @@ public struct IntegrationStatus: Sendable {
     public let codexConfigured: Bool
     public let piInstalled: Bool
     public let piConfigured: Bool
+    public let claudeInstalled: Bool
+    public let claudeConfigured: Bool
     public let messages: [String]
     
     public init(
@@ -12,12 +14,16 @@ public struct IntegrationStatus: Sendable {
         codexConfigured: Bool,
         piInstalled: Bool,
         piConfigured: Bool,
+        claudeInstalled: Bool,
+        claudeConfigured: Bool,
         messages: [String]
     ) {
         self.codexInstalled = codexInstalled
         self.codexConfigured = codexConfigured
         self.piInstalled = piInstalled
         self.piConfigured = piConfigured
+        self.claudeInstalled = claudeInstalled
+        self.claudeConfigured = claudeConfigured
         self.messages = messages
     }
 }
@@ -159,6 +165,102 @@ public struct AutoIntegrationManager: Sendable {
     elif [ -x "${SKY_CLIENT}" ]; then
         "${SKY_CLIENT}" "$@" >/dev/null 2>&1 || true
     fi
+
+    exit 0
+    """
+
+    /// 内置的 Claude Code (CLI) 通知挂载脚本模板
+    public static let embeddedClaudeNotifyScript: String = """
+    #!/usr/bin/env bash
+    # AgentFloat - Claude Code (CLI) Notify Hook (Auto-generated)
+    set -euo pipefail
+
+    SERVER_URL="${AGENTFLOAT_URL:-http://127.0.0.1:41920}"
+    TOKEN_FILE="${HOME}/.agentfloat/auth_token"
+
+    PAYLOAD=""
+    if [ "$#" -gt 0 ]; then
+        PAYLOAD="${*: -1}"
+    elif [ ! -t 0 ]; then
+        PAYLOAD=$(cat)
+    fi
+
+    if [ -z "${PAYLOAD}" ]; then
+        exit 0
+    fi
+
+    TOKEN=""
+    if [ -n "${AGENTFLOAT_TOKEN:-}" ]; then
+        TOKEN="${AGENTFLOAT_TOKEN}"
+    elif [ -f "${TOKEN_FILE}" ]; then
+        TOKEN=$(cat "${TOKEN_FILE}" | tr -d '[:space:]')
+    fi
+
+    if [ -z "${TOKEN}" ]; then
+        exit 0
+    fi
+
+    NORMALIZED_PAYLOAD=$(RAW_PAYLOAD="${PAYLOAD}" python3 - <<'EOF' 2>/dev/null || echo ""
+    import os, sys, json, time
+
+    raw = os.environ.get("RAW_PAYLOAD", "").strip()
+    try:
+        data = json.loads(raw)
+    except Exception:
+        data = {"last_assistant_message": raw, "status": "completed"}
+
+    session_id = data.get("session_id") or data.get("sessionId") or ""
+    turn_id = data.get("turn_id") or data.get("turnId") or f"turn-{int(time.time() * 1000)}"
+    cwd = data.get("cwd") or ""
+    msg = data.get("last_assistant_message") or data.get("lastAssistantMessage") or data.get("message") or ""
+    status = data.get("status") or "completed"
+    error = data.get("error") or ""
+    term_app = data.get("terminal_app") or os.environ.get("TERM_PROGRAM") or ""
+
+    if error or "fail" in str(status).lower() or "err" in str(status).lower():
+        norm_status = "error"
+    elif "abort" in str(status).lower() or "cancel" in str(status).lower():
+        norm_status = "aborted"
+    else:
+        norm_status = "completed"
+
+    msg_snippet = ""
+    if msg:
+        first_line = str(msg).strip().split("\\n")[0].strip()
+        if len(first_line) > 35:
+            msg_snippet = first_line[:32] + "..."
+        else:
+            msg_snippet = first_line
+
+    final_title = data.get("title") or (f"Claude: {msg_snippet}" if msg_snippet else "Claude 执行完成")
+
+    output = {
+        "session_id": session_id,
+        "turn_id": turn_id,
+        "cwd": cwd,
+        "last_assistant_message": msg,
+        "status": norm_status,
+        "error": error if error else None,
+        "terminal_app": term_app,
+        "title": final_title
+    }
+
+    print(json.dumps(output))
+    EOF
+    )
+
+    if [ -z "${NORMALIZED_PAYLOAD}" ]; then
+        exit 0
+    fi
+
+    curl -s -X POST "${SERVER_URL}/api/claude/notify" \\
+         -H "Content-Type: application/json" \\
+         -H "Authorization: Bearer ${TOKEN}" \\
+         -d "${NORMALIZED_PAYLOAD}" >/dev/null 2>&1 || \\
+    curl -s -X POST "${SERVER_URL}/api/events" \\
+         -H "Content-Type: application/json" \\
+         -H "Authorization: Bearer ${TOKEN}" \\
+         -d "${NORMALIZED_PAYLOAD}" >/dev/null 2>&1 || true
 
     exit 0
     """
@@ -331,17 +433,22 @@ public struct AutoIntegrationManager: Sendable {
         FileManager.default.homeDirectoryForCurrentUser
     }
 
-    /// 部署自包含的 codex-notify.sh 到 ~/.agentfloat/hooks/codex-notify.sh
+    /// 部署自包含的通知脚本到 ~/.agentfloat/hooks/
     @discardableResult
-    public static func ensureHooksDeployed() -> String {
+    public static func ensureHooksDeployed() -> (codex: String, claude: String) {
         let hooksDir = homeDir.appendingPathComponent(".agentfloat/hooks", isDirectory: true)
         try? FileManager.default.createDirectory(at: hooksDir, withIntermediateDirectories: true, attributes: [
             .posixPermissions: 0o755
         ])
-        let hookFile = hooksDir.appendingPathComponent("codex-notify.sh")
-        try? embeddedCodexNotifyScript.write(to: hookFile, atomically: true, encoding: .utf8)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: hookFile.path)
-        return hookFile.path
+        let codexHookFile = hooksDir.appendingPathComponent("codex-notify.sh")
+        try? embeddedCodexNotifyScript.write(to: codexHookFile, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: codexHookFile.path)
+
+        let claudeHookFile = hooksDir.appendingPathComponent("claude-notify.sh")
+        try? embeddedClaudeNotifyScript.write(to: claudeHookFile, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: claudeHookFile.path)
+
+        return (codexHookFile.path, claudeHookFile.path)
     }
 
     /// 自动检测并无感配置 Codex (CLI 与 桌面版)
@@ -352,7 +459,7 @@ public struct AutoIntegrationManager: Sendable {
             return (false, "未检测到本地 Codex 环境 (~/.codex)")
         }
 
-        let hookPath = ensureHooksDeployed()
+        let hookPath = ensureHooksDeployed().codex
         let configToml = codexDir.appendingPathComponent("config.toml")
         
         var tomlContent = (try? String(contentsOf: configToml, encoding: .utf8)) ?? ""
@@ -429,22 +536,87 @@ public struct AutoIntegrationManager: Sendable {
         }
     }
 
+    /// 自动检测并无感配置 Claude CLI (Claude Code)
+    @discardableResult
+    public static func setupClaude() -> (Bool, String) {
+        let claudeDir = homeDir.appendingPathComponent(".claude", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: claudeDir.path) else {
+            return (false, "未检测到本地 Claude CLI 环境 (~/.claude)")
+        }
+
+        let hookPath = ensureHooksDeployed().claude
+        let settingsFile = claudeDir.appendingPathComponent("settings.json")
+        
+        var settings: [String: Any] = [:]
+        if let data = try? Data(contentsOf: settingsFile),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            settings = json
+        }
+        
+        // 备份原有配置
+        let backupFile = claudeDir.appendingPathComponent("settings.json.bak")
+        if let originalData = try? Data(contentsOf: settingsFile) {
+            try? originalData.write(to: backupFile)
+        }
+
+        var hooks = settings["hooks"] as? [String: Any] ?? [:]
+        var stopHooks = hooks["Stop"] as? [[String: Any]] ?? []
+        
+        let alreadyConfigured = stopHooks.contains { entry in
+            if let subHooks = entry["hooks"] as? [[String: Any]] {
+                return subHooks.contains { h in
+                    (h["command"] as? String)?.contains("claude-notify.sh") == true
+                }
+            }
+            return false
+        }
+        
+        if alreadyConfigured {
+            return (true, "Claude Code 已就绪（已配置通知联动）")
+        }
+        
+        let newHookEntry: [String: Any] = [
+            "hooks": [
+                [
+                    "type": "command",
+                    "command": hookPath
+                ]
+            ]
+        ]
+        
+        stopHooks.append(newHookEntry)
+        hooks["Stop"] = stopHooks
+        settings["hooks"] = hooks
+        
+        do {
+            let data = try JSONSerialization.data(withJSONObject: settings, options: [.prettyPrinted, .sortedKeys])
+            try data.write(to: settingsFile, options: .atomic)
+            return (true, "已自动无感注入 Claude Code 通知挂载 (~/.claude/settings.json)")
+        } catch {
+            return (false, "写入 Claude 配置失败: \(error.localizedDescription)")
+        }
+    }
+
     /// 一键全自动检测与接入所有环境
     public static func autoSetupAll() -> IntegrationStatus {
         _ = ensureHooksDeployed()
         
         let (codexOk, codexMsg) = setupCodex()
         let (piOk, piMsg) = setupPi()
+        let (claudeOk, claudeMsg) = setupClaude()
         
         let codexInstalled = FileManager.default.fileExists(atPath: homeDir.appendingPathComponent(".codex").path)
         let piInstalled = FileManager.default.fileExists(atPath: homeDir.appendingPathComponent(".pi/agent").path)
+        let claudeInstalled = FileManager.default.fileExists(atPath: homeDir.appendingPathComponent(".claude").path)
         
         return IntegrationStatus(
             codexInstalled: codexInstalled,
             codexConfigured: codexOk,
             piInstalled: piInstalled,
             piConfigured: piOk,
-            messages: [codexMsg, piMsg]
+            claudeInstalled: claudeInstalled,
+            claudeConfigured: claudeOk,
+            messages: [codexMsg, piMsg, claudeMsg]
         )
     }
 }

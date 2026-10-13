@@ -44,7 +44,7 @@
 - 🗄 **Concurrent SQLite Storage (`SQLiteTaskStore`)**:
   Actor-isolated native SQLite3 C API wrapper with WAL mode and unique deduplication index `(source, session_id, turn_id)` to prevent notification storms from duplicate webhooks or retries.
 - 🧩 **Zero-Configuration Ecosystem Integration**:
-  Turnkey out-of-the-box! Upon launch, AgentFloat automatically detects local installations of **Codex (CLI & Desktop)** and **Pi Agent**, seamlessly configuring notification hooks and extensions with zero manual setup.
+  Turnkey out-of-the-box! Upon launch, AgentFloat automatically detects local installations of **Codex (CLI & Desktop)**, **Pi Agent**, and **Claude Code (CLI)**, seamlessly configuring notification hooks and extensions with zero manual setup.
 
 ---
 
@@ -70,7 +70,8 @@ AgentFloat
 │   └── main.swift                      # Diagnostic, emit, list, resolve, and test commands
 │
 ├── extensions/pi/                      # Official Pi Agent extension
-└── scripts/codex-notify.sh             # Codex CLI notification hook script
+├── scripts/codex-notify.sh             # Codex CLI notification hook script
+└── scripts/claude-notify.sh            # Claude Code (CLI) notification hook script
 ```
 
 ---
@@ -165,8 +166,11 @@ agentfloat health
 ### 2. Pi Agent Automatic Integration
 - Automatically installs the native extension to `~/.pi/agent/extensions/agentfloat.ts`, automatically loaded by Pi across all workspaces.
 
-### 3. One-Click Verification & Repair
-If you install Codex or Pi later, click **"Re-detect"** in the macOS menu bar popover, or run anytime in terminal:
+### 3. Claude Code (CLI) Automatic Integration
+- Automatically deploys the notification hook to `~/.agentfloat/hooks/claude-notify.sh` and mounts it to `hooks.Stop` in `~/.claude/settings.json`.
+
+### 4. One-Click Verification & Repair
+If you install Codex, Pi, or Claude later, click **"Re-detect"** in the macOS menu bar popover, or run anytime in terminal:
 ```bash
 agentfloat setup
 ```
@@ -183,6 +187,7 @@ The local server listens on `http://127.0.0.1:41920`. Endpoints require the auth
 | `GET` | `/api/health` | Health check (public) |
 | `POST` | `/api/events` | Ingest generic agent event |
 | `POST` | `/api/codex/notify` | Ingest Codex CLI notification payload |
+| `POST` | `/api/claude/notify` | Ingest Claude CLI notification payload |
 | `POST` | `/api/test/emit` | Emit simulated HUD test card |
 | `GET` | `/api/tasks` | List tasks (`?filter=pending` or `?filter=all`) |
 | `POST` | `/api/tasks/{id}/resolve` | Mark task as resolved |
