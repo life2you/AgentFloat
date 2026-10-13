@@ -2,6 +2,16 @@
 
 所有重要的项目演进与版本更迭均记录于此。遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 规范。
 
+## [1.0.10] - 2026-10-13
+
+### 新增特性 (Added)
+- **多维度版本号可视化与查询**:
+  - 核心层新增 `AgentFloatVersion`，统一管理并动态读取 App Bundle 版本。
+  - 菜单栏 Popover 顶部及底部栏醒目展示当前版本号（如 `v1.0.10`）。
+  - 悬浮卡片顶栏提示加入当前版本信息。
+  - 命令行工具支持 `agentfloat version`、`agentfloat -v`、`agentfloat --version` 快捷查询。
+  - 打包脚本自动注入 `Info.plist` 的 `CFBundleShortVersionString` 与 `CFBundleVersion`，确保系统级关于信息同步。
+
 ## [1.0.9] - 2026-10-11
 
 ### 新增与优化 (Added & Improved)

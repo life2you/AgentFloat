@@ -21,6 +21,13 @@ public struct MenuBarView: View {
                         .foregroundColor(.accentColor)
                     Text("AgentFloat")
                         .font(.headline)
+                    Text("v\(AgentFloatVersion.current)")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1.5)
+                        .background(Color.secondary.opacity(0.12))
+                        .clipShape(Capsule())
                 }
                 
                 Spacer()
@@ -128,7 +135,7 @@ public struct MenuBarView: View {
             
             // 底部操作栏
             HStack {
-                Text("零云端依赖 · 本地安全")
+                Text("v\(AgentFloatVersion.current) · 零云端依赖 · 本地安全")
                     .font(.caption2)
                     .foregroundColor(.secondary)
                 

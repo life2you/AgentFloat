@@ -13,12 +13,13 @@ struct AgentFloatCLI {
 
     static func printHelp() {
         print("""
-        AgentFloat CLI - 桌面端 Agent 悬浮通知与任务追踪工具
+        AgentFloat CLI (v\(AgentFloatVersion.current)) - 桌面端 Agent 悬浮通知与任务追踪工具
 
         用法:
           agentfloat <command> [options]
 
         命令:
+          version, -v, --version 显示当前版本号
           emit               发送任务事件
             --source <name>    来源 (pi / codex / custom, 默认 custom)
             --status <status>  状态 (completed / error / aborted, 默认 completed)
@@ -70,6 +71,10 @@ struct AgentFloatCLI {
         let (data, response) = try await URLSession.shared.data(for: request)
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 500
         return (statusCode, data)
+    }
+
+    static func handleVersion() {
+        print("AgentFloat v\(AgentFloatVersion.current)")
     }
 
     static func handleHealth() async {
@@ -461,6 +466,8 @@ struct AgentFloatCLI {
         let subArgs = Array(args.dropFirst())
 
         switch command {
+        case "version", "-v", "--version", "-V":
+            handleVersion()
         case "emit":
             await handleEmit(args: subArgs)
         case "codex-notify":

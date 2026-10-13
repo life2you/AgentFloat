@@ -41,6 +41,7 @@ public struct FloatingCardView: View {
                         .background(Color.accentColor)
                         .clipShape(Capsule())
                 }
+                .help("AgentFloat v\(AgentFloatVersion.current)")
                 
                 Spacer()
                 

@@ -241,7 +241,7 @@ public final class LocalHttpServer: @unchecked Sendable {
         // GET /api/health 免鉴权
         if method == "GET" && path == "/api/health" {
             let json = """
-            {"status":"ok","version":"1.0.0","port":\(port)}
+            {"status":"ok","version":"\(AgentFloatVersion.current)","port":\(port)}
             """
             sendJson(connection: connection, status: 200, json: json)
             return

@@ -32,8 +32,17 @@ chmod +x "${APP_BUNDLE}/Contents/MacOS/${EXECUTABLE_NAME}"
 cp "${BIN_PATH}/AgentFloatCLI" "${APP_BUNDLE}/Contents/MacOS/${CLI_NAME}"
 chmod +x "${APP_BUNDLE}/Contents/MacOS/${CLI_NAME}"
 
+VERSION="$(tr -d '[:space:]' < "${ROOT_DIR}/VERSION" 2>/dev/null || echo "1.0.9")"
+
 if [ -f "Sources/AgentFloatApp/Resources/Info.plist" ]; then
     cp "Sources/AgentFloatApp/Resources/Info.plist" "${APP_BUNDLE}/Contents/Info.plist"
+    if command -v /usr/libexec/PlistBuddy &>/dev/null; then
+        /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "${APP_BUNDLE}/Contents/Info.plist" 2>/dev/null || \
+        /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string ${VERSION}" "${APP_BUNDLE}/Contents/Info.plist" 2>/dev/null || true
+
+        /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${VERSION}" "${APP_BUNDLE}/Contents/Info.plist" 2>/dev/null || \
+        /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string ${VERSION}" "${APP_BUNDLE}/Contents/Info.plist" 2>/dev/null || true
+    fi
 fi
 
 if [ -f "assets/appicon/AppIcon.icns" ]; then
