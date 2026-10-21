@@ -5,6 +5,7 @@ public enum TaskSource: String, Codable, Sendable, CaseIterable {
     case pi = "pi"
     case codex = "codex"
     case claude = "claude"
+    case dsh = "dsh"
     case custom = "custom"
     
     public var displayName: String {
@@ -12,6 +13,7 @@ public enum TaskSource: String, Codable, Sendable, CaseIterable {
         case .pi: return "Pi Agent"
         case .codex: return "Codex"
         case .claude: return "Claude"
+        case .dsh: return "DeepSeek Harness"
         case .custom: return "Custom"
         }
     }

@@ -44,7 +44,7 @@
 - 🗄 **高并发安全存储 (`SQLiteTaskStore`)**：
   原生 SQLite3 C API actor 封装，启用 WAL 模式与唯一去重索引 `(source, session_id, turn_id)`，天然防御 Webhook 重复推送或重试产生的通知风暴。
 - 🧩 **全生态接入与零配置直连**：
-  开箱即用！应用启动时自动检测本机安装的 **Codex (CLI & 桌面版)**、**Pi Agent** 与 **Claude Code (CLI)**，并在后台全自动完成通知挂载与扩展安装，用户无需手动查找路径或编辑任何配置文件。
+  开箱即用！应用启动时自动检测本机安装的 **Codex (CLI & 桌面版)**、**Pi Agent**、**Claude Code (CLI)** 与 **DeepSeek Harness (dsh 桌面版)**，并在后台全自动完成通知挂载与插件安装，用户无需手动查找路径或编辑任何配置文件。
 
 ---
 
@@ -70,6 +70,7 @@ AgentFloat
 │   └── main.swift                      # 调试、事件发送、任务列表与处理
 │
 ├── extensions/pi/                      # Pi Agent 官方扩展
+├── extensions/dsh/                     # DeepSeek Harness (dsh) 桌面插件
 ├── scripts/codex-notify.sh             # Codex CLI 通知适配脚本
 └── scripts/claude-notify.sh            # Claude Code (CLI) 通知适配脚本
 ```
@@ -169,8 +170,13 @@ agentfloat health
 ### 3. Claude Code (CLI) 自动联动
 - 启动应用时自动在 `~/.agentfloat/hooks/claude-notify.sh` 部署自包含 Hook，并自动配置到 `~/.claude/settings.json` 的 `hooks.Stop` 生命周期。
 
-### 4. 一键检测与修复
-若后续新安装了 Codex、Pi 或 Claude，可在系统菜单栏点击 **「重新检测」**，或在终端随时运行：
+### 4. DeepSeek Harness (dsh 桌面版) 自动联动
+- 自动检测 `~/.dsh` 环境，部署 Cordis 插件至 `~/.agentfloat/extensions/dsh/`。
+- 自动通过 `dsh plugin --profile desktop add` 无感配置桌面 profile 环境；检测桌面运行状态，若桌面在运行则提示完全退出桌面端后再重新检测，以避免 profile 写锁冲突。
+- 支持卡片一键通过 `dsh://open` 深链接精准跳转并置顶 `DeepSeek Harness.app`。
+
+### 5. 一键检测与修复
+若后续新安装了 Codex、Pi、Claude 或 DeepSeek Harness，可在系统菜单栏点击 **「重新检测」**，或在终端随时运行：
 ```bash
 agentfloat setup
 ```

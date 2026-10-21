@@ -2,6 +2,16 @@
 
 所有重要的项目演进与版本更迭均记录于此。遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 规范。
 
+## [1.0.11] - 2026-10-21
+
+### 新增特性 (Added)
+- **DeepSeek Harness (dsh) 桌面端接入与通知联动**:
+  - 核心模型层新增 `TaskSource.dsh`（显示名：`DeepSeek Harness`）。
+  - 新增 `extensions/dsh/` Cordis ESM 插件，监听 `session/event`（`turn/end` 权威结算）、`agent/error` 与 `agent/status` 生命周期，静默上报任务状态。
+  - `AutoIntegrationManager` 自动检测 `~/.dsh`，部署插件至 `~/.agentfloat/extensions/dsh/`，并自动调用 `dsh plugin --profile desktop add` 无感配置桌面环境；支持桌面进程写锁检测。
+  - `TerminalLauncher` 新增 `SupportedTerminal.dsh`（Bundle ID: `com.deepseek.dsh`），支持卡片一键通过 `dsh://open` 深链接与系统置顶精准跳转至 DeepSeek Harness 桌面应用。
+  - 命令行工具与菜单栏 Popover 同步支持 DeepSeek Harness 检测与状态反馈。
+
 ## [1.0.10] - 2026-10-13
 
 ### 新增特性 (Added)

@@ -17,6 +17,8 @@ struct TerminalLauncherTests {
         #expect(SupportedTerminal.from(identifier: "cursor") == .cursor)
         #expect(SupportedTerminal.from(identifier: "codex") == .codex)
         #expect(SupportedTerminal.from(identifier: "chatgpt") == .codex)
+        #expect(SupportedTerminal.from(identifier: "dsh") == .dsh)
+        #expect(SupportedTerminal.from(identifier: "deepseek") == .dsh)
         #expect(SupportedTerminal.from(identifier: "terminal") == .terminal)
         #expect(SupportedTerminal.from(identifier: "apple") == .terminal)
         #expect(SupportedTerminal.from(identifier: "unknown_shell") == nil)
@@ -29,6 +31,7 @@ struct TerminalLauncherTests {
         #expect(SupportedTerminal.terminal.rawValue == "com.apple.Terminal")
         #expect(SupportedTerminal.iterm2.rawValue == "com.googlecode.iterm2")
         #expect(SupportedTerminal.codex.rawValue == "com.openai.codex")
+        #expect(SupportedTerminal.dsh.rawValue == "com.deepseek.dsh")
     }
     
     @Test("当前活跃终端识别")
@@ -42,6 +45,10 @@ struct TerminalLauncherTests {
         #expect(SupportedTerminal.codex.actionTitle == "应用")
         #expect(SupportedTerminal.codex.actionIconName == "macwindow")
         #expect(!SupportedTerminal.codex.isTerminal)
+        
+        #expect(SupportedTerminal.dsh.actionTitle == "应用")
+        #expect(SupportedTerminal.dsh.actionIconName == "macwindow")
+        #expect(!SupportedTerminal.dsh.isTerminal)
         
         #expect(SupportedTerminal.ghostty.actionTitle == "终端")
         #expect(SupportedTerminal.ghostty.actionIconName == "terminal")

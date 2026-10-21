@@ -44,7 +44,7 @@
 - 🗄 **Concurrent SQLite Storage (`SQLiteTaskStore`)**:
   Actor-isolated native SQLite3 C API wrapper with WAL mode and unique deduplication index `(source, session_id, turn_id)` to prevent notification storms from duplicate webhooks or retries.
 - 🧩 **Zero-Configuration Ecosystem Integration**:
-  Turnkey out-of-the-box! Upon launch, AgentFloat automatically detects local installations of **Codex (CLI & Desktop)**, **Pi Agent**, and **Claude Code (CLI)**, seamlessly configuring notification hooks and extensions with zero manual setup.
+  Turnkey out-of-the-box! Upon launch, AgentFloat automatically detects local installations of **Codex (CLI & Desktop)**, **Pi Agent**, **Claude Code (CLI)**, and **DeepSeek Harness (dsh desktop)**, seamlessly configuring notification hooks and extensions with zero manual setup.
 
 ---
 
@@ -70,6 +70,7 @@ AgentFloat
 │   └── main.swift                      # Diagnostic, emit, list, resolve, and test commands
 │
 ├── extensions/pi/                      # Official Pi Agent extension
+├── extensions/dsh/                     # DeepSeek Harness (dsh) desktop extension
 ├── scripts/codex-notify.sh             # Codex CLI notification hook script
 └── scripts/claude-notify.sh            # Claude Code (CLI) notification hook script
 ```
@@ -169,8 +170,13 @@ agentfloat health
 ### 3. Claude Code (CLI) Automatic Integration
 - Automatically deploys the notification hook to `~/.agentfloat/hooks/claude-notify.sh` and mounts it to `hooks.Stop` in `~/.claude/settings.json`.
 
-### 4. One-Click Verification & Repair
-If you install Codex, Pi, or Claude later, click **"Re-detect"** in the macOS menu bar popover, or run anytime in terminal:
+### 4. DeepSeek Harness (dsh Desktop) Automatic Integration
+- Automatically detects the `~/.dsh` environment and deploys the Cordis plugin to `~/.agentfloat/extensions/dsh/`.
+- Automatically executes `dsh plugin --profile desktop add` to integrate with the desktop profile; safely checks for running desktop processes and warns if the app is active to avoid profile write-lock conflicts.
+- Supports one-click activation and window focus for `DeepSeek Harness.app` via `dsh://open` deep link.
+
+### 5. One-Click Verification & Repair
+If you install Codex, Pi, Claude, or DeepSeek Harness later, click **"Re-detect"** in the macOS menu bar popover, or run anytime in terminal:
 ```bash
 agentfloat setup
 ```

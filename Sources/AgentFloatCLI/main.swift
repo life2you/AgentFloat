@@ -21,7 +21,7 @@ struct AgentFloatCLI {
         命令:
           version, -v, --version 显示当前版本号
           emit               发送任务事件
-            --source <name>    来源 (pi / codex / custom, 默认 custom)
+            --source <name>    来源 (pi / codex / claude / dsh / custom, 默认 custom)
             --status <status>  状态 (completed / error / aborted, 默认 completed)
             --title <title>    任务标题
             --cwd <path>       工作目录 (默认当前目录)
@@ -44,7 +44,7 @@ struct AgentFloatCLI {
             --pending          仅显示未处理任务 (默认)
 
           resolve <id>       标记指定任务为已处理
-          setup              一键自动检测并配置本地 Codex、Pi Agent 与 Claude CLI 联动
+          setup              一键自动检测并配置本地 Codex、Pi Agent、Claude CLI 与 DeepSeek Harness 联动
           autostart [on/off] 查看或设置开机自启动
           token              查看当前本地鉴权 Token
           health             检测 AgentFloat 服务健康状态
@@ -429,10 +429,10 @@ struct AgentFloatCLI {
             print("  • \(msg)")
         }
         print("")
-        if status.codexConfigured || status.piConfigured || status.claudeConfigured {
-            print("✨ 配置完成！已检测到的 Agent（Codex / Pi / Claude）轮次结束时将自动向 AgentFloat 悬浮窗上报任务。")
+        if status.codexConfigured || status.piConfigured || status.claudeConfigured || status.dshConfigured {
+            print("✨ 配置完成！已检测到的 Agent（Codex / Pi / Claude / DeepSeek Harness）轮次结束时将自动向 AgentFloat 悬浮窗上报任务。")
         } else {
-            print("💡 未检测到本地已安装的 Codex (~/.codex)、Pi Agent (~/.pi/agent) 或 Claude CLI (~/.claude)。后续安装后启动 AgentFloat 即可自动连接。")
+            print("💡 未检测到本地已安装的 Codex (~/.codex)、Pi Agent (~/.pi/agent)、Claude CLI (~/.claude) 或 DeepSeek Harness (~/.dsh)。后续安装后启动 AgentFloat 即可自动连接。")
         }
     }
 

@@ -12,6 +12,7 @@ public enum SupportedTerminal: String, CaseIterable, Sendable {
     case vscode = "com.microsoft.VSCode"
     case cursor = "com.todesktop.230313mzl4w4u92"
     case codex = "com.openai.codex"
+    case dsh = "com.deepseek.dsh"
     
     public var displayName: String {
         switch self {
@@ -25,13 +26,14 @@ public enum SupportedTerminal: String, CaseIterable, Sendable {
         case .vscode: return "VS Code"
         case .cursor: return "Cursor"
         case .codex: return "Codex"
+        case .dsh: return "DeepSeek Harness"
         }
     }
 
     /// 是否为传统终端仿真器
     public var isTerminal: Bool {
         switch self {
-        case .codex:
+        case .codex, .dsh:
             return false
         default:
             return true
@@ -41,7 +43,7 @@ public enum SupportedTerminal: String, CaseIterable, Sendable {
     /// 悬浮卡片与菜单栏中的跳转按钮文案
     public var actionTitle: String {
         switch self {
-        case .codex:
+        case .codex, .dsh:
             return "应用"
         default:
             return "终端"
@@ -51,7 +53,7 @@ public enum SupportedTerminal: String, CaseIterable, Sendable {
     /// 按钮对应图标
     public var actionIconName: String {
         switch self {
-        case .codex:
+        case .codex, .dsh:
             return "macwindow"
         default:
             return "terminal"
@@ -63,6 +65,8 @@ public enum SupportedTerminal: String, CaseIterable, Sendable {
         switch self {
         case .codex:
             return "跳转至 Codex 桌面应用"
+        case .dsh:
+            return "跳转至 DeepSeek Harness 桌面应用"
         default:
             return "激活当前终端窗口"
         }
@@ -81,6 +85,7 @@ public enum SupportedTerminal: String, CaseIterable, Sendable {
         if id.contains("cursor") { return .cursor }
         if id.contains("vscode") || id == "code" { return .vscode }
         if id.contains("codex") || id.contains("chatgpt") || id.contains("openai") { return .codex }
+        if id.contains("deepseek") || id.contains("dsh") { return .dsh }
         if id.contains("terminal") || id.contains("apple") { return .terminal }
         return nil
     }
@@ -101,6 +106,13 @@ public struct TerminalLauncher: Sendable {
         if source == "codex" && (preferred == nil || preferred?.isEmpty == true || preferred?.contains("codex") == true) {
             if runningBundles.contains(SupportedTerminal.codex.rawValue) || isInstalled(terminal: .codex) {
                 return .codex
+            }
+        }
+        
+        // 若来源是 dsh 且未明确指定终端：优先置顶 DeepSeek Harness 桌面应用
+        if source == "dsh" && (preferred == nil || preferred?.isEmpty == true || preferred?.contains("dsh") == true || preferred?.contains("deepseek") == true) {
+            if runningBundles.contains(SupportedTerminal.dsh.rawValue) || isInstalled(terminal: .dsh) {
+                return .dsh
             }
         }
         
@@ -153,6 +165,16 @@ public struct TerminalLauncher: Sendable {
                     bringToFront(bundleId: bundleId)
                     return true
                 }
+            }
+            return bringToFront(bundleId: bundleId)
+        }
+        
+        // 0.1 如果目标是 DeepSeek Harness 桌面端，通过 dsh://open 深度链接激活并置顶
+        if target == .dsh {
+            if let url = URL(string: "dsh://open") {
+                let config = NSWorkspace.OpenConfiguration()
+                config.activates = true
+                NSWorkspace.shared.open(url, configuration: config, completionHandler: nil)
             }
             return bringToFront(bundleId: bundleId)
         }

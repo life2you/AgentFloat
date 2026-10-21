@@ -125,7 +125,7 @@ public struct MenuBarView: View {
                 .buttonStyle(.plain)
                 .font(.system(size: 10))
                 .foregroundColor(.accentColor)
-                .help("重新检测并修复本地 Codex、Pi Agent 与 Claude CLI 联动配置")
+                .help("重新检测并修复本地 Codex、Pi Agent、Claude CLI 与 DeepSeek Harness 联动配置")
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 6)

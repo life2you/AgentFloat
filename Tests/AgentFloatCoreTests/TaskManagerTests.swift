@@ -129,4 +129,41 @@ struct TaskManagerTests {
         try await manager.resolveTask(id: task1.id)
         #expect(manager.pendingTasks.isEmpty)
     }
+    
+    @Test("DeepSeek Harness (dsh) 任务摄取与去重")
+    @MainActor
+    func dshTaskIngestionAndDeduplication() async throws {
+        let (manager, path) = try createManager()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        
+        let task = try await manager.ingestTask(
+            source: "dsh",
+            sessionId: "dsh-session-1",
+            turnId: "dsh-turn-1",
+            title: "DeepSeek Harness: 优化数据库查询",
+            status: .completed,
+            cwd: "/Users/dev/AgentFloat"
+        )
+        
+        #expect(task.source == "dsh")
+        #expect(task.typedSource == .dsh)
+        #expect(TaskSource.allCases.contains(.dsh))
+        #expect(task.typedSource.displayName == "DeepSeek Harness")
+        #expect(task.verificationNotice == "任务结束 · 请人工验证代码")
+        #expect(manager.currentCardTask?.id == task.id)
+        
+        // 重复 (source, session, turn) 去重行为
+        let duplicateTask = try await manager.ingestTask(
+            source: "dsh",
+            sessionId: "dsh-session-1",
+            turnId: "dsh-turn-1",
+            title: "DeepSeek Harness: 优化数据库查询 (更新)",
+            status: .completed,
+            cwd: "/Users/dev/AgentFloat"
+        )
+        
+        #expect(duplicateTask.id == task.id)
+        #expect(duplicateTask.title == "DeepSeek Harness: 优化数据库查询 (更新)")
+        #expect(manager.pendingTasks.count == 1)
+    }
 }
