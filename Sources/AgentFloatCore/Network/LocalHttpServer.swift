@@ -29,6 +29,30 @@ public struct GenericEventPayload: Codable, Sendable {
     public var durationMs: Int?
     public var metadata: [String: String]?
     
+    enum CodingKeys: String, CodingKey {
+        case source
+        case sessionId = "sessionId"
+        case sessionIdSnake = "session_id"
+        case turnId = "turnId"
+        case turnIdSnake = "turn_id"
+        case title
+        case promptSummary = "promptSummary"
+        case promptSummarySnake = "prompt_summary"
+        case resultSummary = "resultSummary"
+        case resultSummarySnake = "result_summary"
+        case lastAssistantMessage = "last_assistant_message"
+        case status
+        case errorMessage = "errorMessage"
+        case errorMessageSnake = "error_message"
+        case error
+        case cwd
+        case terminalApp = "terminalApp"
+        case terminalAppSnake = "terminal_app"
+        case durationMs = "durationMs"
+        case durationMsSnake = "duration_ms"
+        case metadata
+    }
+    
     public init(
         source: String? = nil,
         sessionId: String? = nil,
@@ -55,6 +79,47 @@ public struct GenericEventPayload: Codable, Sendable {
         self.terminalApp = terminalApp
         self.durationMs = durationMs
         self.metadata = metadata
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.source = try container.decodeIfPresent(String.self, forKey: .source)
+        self.sessionId = try container.decodeIfPresent(String.self, forKey: .sessionId)
+            ?? container.decodeIfPresent(String.self, forKey: .sessionIdSnake)
+        self.turnId = try container.decodeIfPresent(String.self, forKey: .turnId)
+            ?? container.decodeIfPresent(String.self, forKey: .turnIdSnake)
+        self.title = try container.decodeIfPresent(String.self, forKey: .title)
+        self.promptSummary = try container.decodeIfPresent(String.self, forKey: .promptSummary)
+            ?? container.decodeIfPresent(String.self, forKey: .promptSummarySnake)
+        self.resultSummary = try container.decodeIfPresent(String.self, forKey: .resultSummary)
+            ?? container.decodeIfPresent(String.self, forKey: .resultSummarySnake)
+            ?? container.decodeIfPresent(String.self, forKey: .lastAssistantMessage)
+        self.status = try container.decodeIfPresent(String.self, forKey: .status)
+        self.errorMessage = try container.decodeIfPresent(String.self, forKey: .errorMessage)
+            ?? container.decodeIfPresent(String.self, forKey: .errorMessageSnake)
+            ?? container.decodeIfPresent(String.self, forKey: .error)
+        self.cwd = try container.decodeIfPresent(String.self, forKey: .cwd)
+        self.terminalApp = try container.decodeIfPresent(String.self, forKey: .terminalApp)
+            ?? container.decodeIfPresent(String.self, forKey: .terminalAppSnake)
+        self.durationMs = try container.decodeIfPresent(Int.self, forKey: .durationMs)
+            ?? container.decodeIfPresent(Int.self, forKey: .durationMsSnake)
+        self.metadata = try container.decodeIfPresent([String: String].self, forKey: .metadata)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(source, forKey: .source)
+        try container.encodeIfPresent(sessionId, forKey: .sessionId)
+        try container.encodeIfPresent(turnId, forKey: .turnId)
+        try container.encodeIfPresent(title, forKey: .title)
+        try container.encodeIfPresent(promptSummary, forKey: .promptSummary)
+        try container.encodeIfPresent(resultSummary, forKey: .resultSummary)
+        try container.encodeIfPresent(status, forKey: .status)
+        try container.encodeIfPresent(errorMessage, forKey: .errorMessage)
+        try container.encodeIfPresent(cwd, forKey: .cwd)
+        try container.encodeIfPresent(terminalApp, forKey: .terminalApp)
+        try container.encodeIfPresent(durationMs, forKey: .durationMs)
+        try container.encodeIfPresent(metadata, forKey: .metadata)
     }
 }
 
@@ -278,13 +343,20 @@ public final class LocalHttpServer: @unchecked Sendable {
         if method == "POST" && path == "/api/events" {
             do {
                 let payload = try decoder.decode(GenericEventPayload.self, from: body)
-                let status = TaskStatus(rawValue: payload.status?.lowercased() ?? "") ?? .completed
+                let status = TaskManager.resolveStatus(rawStatus: payload.status, errorMessage: payload.errorMessage)
+                let defaultTitle: String = {
+                    switch status {
+                    case .error: return "Agent 任务异常"
+                    case .aborted: return "Agent 任务已中止"
+                    case .completed, .unknown: return "Agent 任务完成"
+                    }
+                }()
                 
                 let task = try await taskManager.ingestTask(
                     source: payload.source ?? TaskSource.custom.rawValue,
                     sessionId: payload.sessionId ?? UUID().uuidString,
                     turnId: payload.turnId ?? UUID().uuidString,
-                    title: payload.title ?? "Agent 任务完成",
+                    title: payload.title ?? defaultTitle,
                     promptSummary: payload.promptSummary,
                     resultSummary: payload.resultSummary,
                     status: status,

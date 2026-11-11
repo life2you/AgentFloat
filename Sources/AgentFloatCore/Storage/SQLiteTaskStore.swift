@@ -329,7 +329,7 @@ public actor SQLiteTaskStore {
             prompt_summary = COALESCE(excluded.prompt_summary, tasks.prompt_summary),
             result_summary = COALESCE(excluded.result_summary, tasks.result_summary),
             status = excluded.status,
-            error_message = COALESCE(excluded.error_message, tasks.error_message),
+            error_message = excluded.error_message,
             cwd = COALESCE(excluded.cwd, tasks.cwd),
             terminal_app = COALESCE(excluded.terminal_app, tasks.terminal_app),
             is_resolved = excluded.is_resolved,

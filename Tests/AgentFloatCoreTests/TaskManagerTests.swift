@@ -166,4 +166,32 @@ struct TaskManagerTests {
         #expect(duplicateTask.title == "DeepSeek Harness: 优化数据库查询 (更新)")
         #expect(manager.pendingTasks.count == 1)
     }
+    
+    @Test("异常状态解析：同义状态词与错误信息触发 error 状态")
+    @MainActor
+    func errorStatusResolution() async throws {
+        #expect(TaskManager.resolveStatus(rawStatus: "failed", errorMessage: nil) == .error)
+        #expect(TaskManager.resolveStatus(rawStatus: "error", errorMessage: nil) == .error)
+        #expect(TaskManager.resolveStatus(rawStatus: "completed", errorMessage: "API rate limit exceeded") == .error)
+        #expect(TaskManager.resolveStatus(rawStatus: nil, errorMessage: "Network connection lost") == .error)
+        #expect(TaskManager.resolveStatus(rawStatus: "cancelled", errorMessage: nil) == .aborted)
+        #expect(TaskManager.resolveStatus(rawStatus: "aborted", errorMessage: nil) == .aborted)
+        #expect(TaskManager.resolveStatus(rawStatus: "completed", errorMessage: nil) == .completed)
+        #expect(TaskManager.resolveStatus(rawStatus: nil, errorMessage: nil) == .completed)
+        
+        let (manager, path) = try createManager()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        
+        let codexErrTask = try await manager.ingestCodexNotification(
+            payload: CodexNotificationPayload(
+                threadId: "t-err",
+                turnId: "turn-err",
+                status: "failed",
+                error: "Stream disconnected"
+            )
+        )
+        #expect(codexErrTask.status == .error)
+        #expect(codexErrTask.title == "Codex 执行异常")
+        #expect(codexErrTask.verificationNotice == "任务异常 · 请检查错误日志")
+    }
 }

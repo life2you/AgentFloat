@@ -65,7 +65,8 @@ function truncate(str: string, maxLen: number): string {
 function extractPrompt(messages: any[]): string | undefined {
   if (!Array.isArray(messages)) return undefined;
   for (let i = messages.length - 1; i >= 0; i--) {
-    const msg = messages[i];
+    const item = messages[i];
+    const msg = item?.type === 'message' && item?.message ? item.message : item;
     if (msg?.role === 'user') {
       const content = msg.content;
       if (typeof content === 'string') return content;
@@ -97,49 +98,152 @@ export function setupAgentFloatExtension(pi: any) {
   const serverUrl = process.env.AGENTFLOAT_URL || 'http://127.0.0.1:41920';
   let sessionStartTime = Date.now();
   let lastPrompt: string | undefined = undefined;
-  let reportedTurns = new Set<string>();
+  let lastOutcome: 'completed' | 'error' | 'aborted' = 'completed';
+  let lastErrorMessage: string | undefined = undefined;
+  let settleTimer: ReturnType<typeof setTimeout> | undefined = undefined;
 
   if (!pi || typeof pi.on !== 'function') return;
 
-  pi.on('before_agent_start', (_event: any, _ctx: any) => {
+  const resetRunState = () => {
     sessionStartTime = Date.now();
+    lastOutcome = 'completed';
+    lastErrorMessage = undefined;
+    if (settleTimer) {
+      clearTimeout(settleTimer);
+      settleTimer = undefined;
+    }
+  };
+
+  pi.on('before_agent_start', (event: any, _ctx: any) => {
+    resetRunState();
+    if (event?.prompt && typeof event.prompt === 'string') {
+      lastPrompt = event.prompt;
+    }
   });
 
   pi.on('agent_start', (_event: any, _ctx: any) => {
     sessionStartTime = Date.now();
+    if (settleTimer) {
+      clearTimeout(settleTimer);
+      settleTimer = undefined;
+    }
   });
 
-  // 记录用户最新提示词
+  // 记录用户最新提示词与 Assistant 执行结果状态
   pi.on('message_end', (event: any, _ctx: any) => {
-    if (event?.message?.role === 'user') {
-      const content = event.message.content;
+    const msg = event?.message;
+    if (!msg) return;
+
+    if (msg.role === 'user') {
+      const content = msg.content;
       if (typeof content === 'string') {
         lastPrompt = content;
       } else if (Array.isArray(content)) {
         const textItem = content.find((c: any) => c.type === 'text');
         if (textItem?.text) lastPrompt = textItem.text;
       }
+    } else if (msg.role === 'assistant') {
+      if (msg.stopReason === 'error' || msg.errorMessage) {
+        lastOutcome = 'error';
+        if (msg.errorMessage) {
+          lastErrorMessage = String(msg.errorMessage);
+        }
+      } else if (msg.stopReason === 'aborted') {
+        lastOutcome = 'aborted';
+      } else {
+        lastOutcome = 'completed';
+        lastErrorMessage = undefined;
+      }
     }
   });
 
-  const handleTurnFinish = async (isAborted: boolean, ctx: any, sourceEvent: string) => {
+  // 记录 Turn 结束与最终结算边界的 outcome
+  pi.on('turn_end', (event: any, _ctx: any) => {
+    if (event?.outcome === 'error') {
+      lastOutcome = 'error';
+      if (event?.message?.errorMessage) {
+        lastErrorMessage = String(event.message.errorMessage);
+      }
+    } else if (event?.outcome === 'aborted') {
+      lastOutcome = 'aborted';
+    } else if (event?.outcome === 'completed') {
+      lastOutcome = 'completed';
+      lastErrorMessage = undefined;
+    }
+  });
+
+  pi.on('agent_before_settle', (event: any, _ctx: any) => {
+    if (event?.outcome === 'error') {
+      lastOutcome = 'error';
+    } else if (event?.outcome === 'aborted') {
+      lastOutcome = 'aborted';
+    } else if (event?.outcome === 'completed') {
+      lastOutcome = 'completed';
+      lastErrorMessage = undefined;
+    }
+  });
+
+  const inspectMessagesOutcome = (messages: any[]): { outcome?: 'completed' | 'error' | 'aborted'; errorMessage?: string } => {
+    if (!Array.isArray(messages)) return {};
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg?.role === 'assistant') {
+        if (msg.stopReason === 'error' || msg.errorMessage) {
+          return {
+            outcome: 'error',
+            errorMessage: msg.errorMessage ? String(msg.errorMessage) : undefined,
+          };
+        }
+        if (msg.stopReason === 'aborted') {
+          return { outcome: 'aborted' };
+        }
+        return { outcome: 'completed' };
+      }
+    }
+    return {};
+  };
+
+  const handleTurnFinish = async (
+    options: { isAborted?: boolean; isError?: boolean; errorMessage?: string; messages?: any[] },
+    ctx: any,
+    sourceEvent: string
+  ) => {
     const now = Date.now();
     const durationMs = Math.max(0, now - sessionStartTime);
-
     const sessionId = sessionIdFor(ctx);
 
-    // 基于时间和 prompt 生成防抖 turn 唯一标识
-    const turnKey = `${sessionId}-${Math.floor(now / 3000)}`;
-    if (reportedTurns.has(turnKey)) {
-      return;
-    }
-    reportedTurns.add(turnKey);
+    const branchEntries = ctx?.sessionManager?.getBranch?.() || [];
+    const branchMessages = branchEntries
+      .filter((e: any) => e?.type === 'message' && e?.message)
+      .map((e: any) => e.message);
+    const msgCheck = inspectMessagesOutcome(options.messages || branchMessages);
+
+    const isAborted = Boolean(options.isAborted) || lastOutcome === 'aborted' || msgCheck.outcome === 'aborted';
+    const isError = !isAborted && (Boolean(options.isError) || lastOutcome === 'error' || msgCheck.outcome === 'error');
+    const finalErrorMsg = isError
+      ? (options.errorMessage || lastErrorMessage || msgCheck.errorMessage || 'Agent 执行过程中发生异常')
+      : undefined;
+
+    const status: 'completed' | 'error' | 'aborted' = isAborted
+      ? 'aborted'
+      : isError
+      ? 'error'
+      : 'completed';
 
     const cwd = ctx?.cwd || process.cwd();
-    const prompt = lastPrompt || extractPrompt(ctx?.sessionManager?.getBranch?.() || []);
-    const title = prompt ? `Pi: ${truncate(prompt, 35)}` : 'Pi Agent 任务完成';
+    const prompt = lastPrompt || extractPrompt(branchMessages.length > 0 ? branchMessages : branchEntries);
+    const defaultTitle = status === 'error'
+      ? 'Pi Agent 执行异常'
+      : status === 'aborted'
+      ? 'Pi Agent 任务已中止'
+      : 'Pi Agent 任务完成';
+    const title = prompt ? `Pi: ${truncate(prompt, 35)}` : defaultTitle;
 
-    const status: 'completed' | 'aborted' = isAborted ? 'aborted' : 'completed';
+    const resultSummary = status === 'error'
+      ? truncate(finalErrorMsg || '任务异常，请检查错误日志', 120)
+      : status === 'aborted'
+      ? '用户中止当前任务'
+      : '执行完成，请核对代码变动';
 
     const payload: AgentFloatEventPayload = {
       source: 'pi',
@@ -147,9 +251,9 @@ export function setupAgentFloatExtension(pi: any) {
       turnId: `turn-${now}`,
       title,
       promptSummary: prompt ? truncate(prompt, 120) : undefined,
-      resultSummary: isAborted ? '用户中止当前任务' : '执行完成，请核对代码变动',
+      resultSummary,
       status,
-      errorMessage: undefined,
+      errorMessage: finalErrorMsg ? truncate(finalErrorMsg, 200) : undefined,
       cwd,
       terminalApp: ctx?.terminalApp || process.env.TERM_PROGRAM || undefined,
       durationMs,
@@ -162,13 +266,37 @@ export function setupAgentFloatExtension(pi: any) {
     await sendToAgentFloat(payload, serverUrl);
   };
 
-  // 监听 agent_end 和 agent_settled 双重保险
-  pi.on('agent_end', async (_event: any, ctx: any) => {
-    await handleTurnFinish(false, ctx, 'agent_end');
+  // agent_settled 为权威最终结算事件；对旧版本没有 agent_settled 的情况用 agent_end 延迟兜底
+  pi.on('agent_end', (event: any, ctx: any) => {
+    const msgCheck = inspectMessagesOutcome(event?.messages);
+    if (msgCheck.outcome === 'error') {
+      lastOutcome = 'error';
+      if (msgCheck.errorMessage) lastErrorMessage = msgCheck.errorMessage;
+    } else if (msgCheck.outcome === 'aborted') {
+      lastOutcome = 'aborted';
+    }
+
+    if (settleTimer) clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => {
+      settleTimer = undefined;
+      void handleTurnFinish({ messages: event?.messages }, ctx, 'agent_end');
+    }, 300);
   });
 
   pi.on('agent_settled', async (event: any, ctx: any) => {
-    await handleTurnFinish(Boolean(event?.aborted), ctx, 'agent_settled');
+    if (settleTimer) {
+      clearTimeout(settleTimer);
+      settleTimer = undefined;
+    }
+    await handleTurnFinish(
+      {
+        isAborted: Boolean(event?.aborted),
+        isError: event?.outcome === 'error' || Boolean(event?.error),
+        errorMessage: event?.errorMessage || (typeof event?.error === 'string' ? event.error : event?.error?.message),
+      },
+      ctx,
+      'agent_settled'
+    );
   });
 }
 

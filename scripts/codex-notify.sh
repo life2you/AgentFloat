@@ -94,14 +94,16 @@ else:
     norm_status = "completed"
 
 msg_snippet = ""
-if msg:
-    first_line = str(msg).strip().split("\n")[0].strip()
+snippet_source = msg or error
+if snippet_source:
+    first_line = str(snippet_source).strip().split("\n")[0].strip()
     if len(first_line) > 35:
         msg_snippet = first_line[:32] + "..."
     else:
         msg_snippet = first_line
 
-final_title = data.get("title") or (f"Codex: {msg_snippet}" if msg_snippet else "Codex 执行完成")
+default_title = "Codex 执行异常" if norm_status == "error" else ("Codex 任务已中止" if norm_status == "aborted" else "Codex 执行完成")
+final_title = data.get("title") or (f"Codex: {msg_snippet}" if msg_snippet else default_title)
 
 output = {
     "thread_id": thread_id,

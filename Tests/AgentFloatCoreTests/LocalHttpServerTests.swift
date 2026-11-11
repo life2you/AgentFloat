@@ -106,5 +106,21 @@ struct LocalHttpServerTests {
         #expect((claudeResp as? HTTPURLResponse)?.statusCode == 200)
         let claudeJson = try JSONSerialization.jsonObject(with: claudeData) as? [String: Any]
         #expect(claudeJson?["taskId"] != nil)
+        
+        // 7. 通用事件接口错误状态识别 POST /api/events (status=failed 或带 errorMessage)
+        var errEventReq = URLRequest(url: eventsUrl)
+        errEventReq.httpMethod = "POST"
+        errEventReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        errEventReq.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        errEventReq.httpBody = "{\"source\":\"pi\",\"session_id\":\"pi_s1\",\"turn_id\":\"pi_t1\",\"status\":\"failed\",\"error\":\"Provider HTTP 500\"}".data(using: .utf8)
+        let (errEventData, errEventResp) = try await URLSession.shared.data(for: errEventReq)
+        #expect((errEventResp as? HTTPURLResponse)?.statusCode == 200)
+        let errEventJson = try JSONSerialization.jsonObject(with: errEventData) as? [String: Any]
+        if let errTaskId = errEventJson?["taskId"] as? String {
+            let savedTask = try await store.getTask(id: errTaskId)
+            #expect(savedTask?.status == .error)
+            #expect(savedTask?.verificationNotice == "任务异常 · 请检查错误日志")
+            #expect(savedTask?.errorMessage == "Provider HTTP 500")
+        }
     }
 }

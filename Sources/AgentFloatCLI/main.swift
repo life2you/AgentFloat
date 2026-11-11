@@ -229,7 +229,7 @@ struct AgentFloatCLI {
             print("⚠️ 无法连接本地服务端，正在回退直写数据库...")
             do {
                 let store = try SQLiteTaskStore()
-                let taskStatus = TaskStatus(rawValue: status.lowercased()) ?? .completed
+                let taskStatus = TaskManager.resolveStatus(rawStatus: status, errorMessage: errorMessage)
                 let task = AgentTask(
                     source: source,
                     sessionId: sessionId,

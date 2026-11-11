@@ -2,6 +2,18 @@
 
 所有重要的项目演进与版本更迭均记录于此。遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 规范。
 
+## [1.0.12] - 2026-11-11
+
+### 修复与优化 (Fixed & Improved)
+- **多 Agent 异常与中止状态全链路精准识别与防误报**:
+  - **核心状态统一解析**: `TaskManager` 引入 `resolveStatus(rawStatus:errorMessage:)`，统一兼容 `failed`/`error`、`aborted`/`cancelled`、`completed`/`success`/`done`/`ok` 等同义词，并在携带错误信息时强制识别为异常状态。
+  - **自适应任务标题与摘要**: 当任务为 `error` 或 `aborted` 时，自动生成专属标题（如 `Codex 执行异常` / `Claude 任务已中止` / `Pi Agent 执行异常`）与结果摘要，不再机械显示“执行完成”。
+  - **通用 HTTP 协议双向兼容**: `LocalHttpServer` 的 `GenericEventPayload` 支持驼峰与下划线格式（`session_id`/`turn_id`/`error`/`errorMessage`/`result_summary`/`last_assistant_message` 等）无缝反序列化。
+  - **Pi Agent 扩展状态生命周期增强**: 全面监听 `message_end`（提取 assistant stopReason 与 errorMessage）、`turn_end`、`agent_before_settle` 与 `agent_settled`，解决多步骤执行异常被误报为完成的问题。
+  - **DeepSeek Harness (dsh) 去重防覆盖**: 引入 `lastErrorInfo` 保护机制，防止 `turn/end` 在 3 秒内将刚才由 `agent/error` 上报的错误状态覆盖为 `completed`；完善 `sessionId` 自动提取。
+  - **数据库存储优化**: `SQLiteTaskStore` 在任务更新时允许覆盖/清理历史 `error_message`。
+  - **自动化测试**: 新增状态解析同义词与异常事件 HTTP 接口全链路测试。
+
 ## [1.0.11] - 2026-10-21
 
 ### 新增特性 (Added)

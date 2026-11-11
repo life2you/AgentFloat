@@ -21,7 +21,8 @@ function loadAuthToken() {
 
 function extractFirstLineSummary(data) {
   if (!data) return '';
-  const candidate = data.summary || data.title || data.lastAssistantMessage || data.message || data.prompt || '';
+  const errText = data.error?.message ?? (typeof data.error === 'string' ? data.error : '');
+  const candidate = data.summary || data.title || data.lastAssistantMessage || data.message || errText || data.prompt || '';
   if (typeof candidate !== 'string' || !candidate.trim()) return '';
   const firstLine = candidate.trim().split(/[\r\n]+/)[0].trim();
   return firstLine.slice(0, 32);
@@ -100,6 +101,7 @@ export function apply(ctx, config = {}) {
 
   const agentStateMap = new Map();
   const reportedTurns = new Set();
+  let lastErrorInfo = null; // 记录最近一次 agent/error，防止 turn/end 无 error 字段或重复覆盖
 
   function recordReportedTurn(sessionId, turnId) {
     const key = `${sessionId}:${turnId}`;
@@ -124,7 +126,16 @@ export function apply(ctx, config = {}) {
 
         const data = event.data || {};
         const turnId = data.turnId || data.turn?.id || (data.status ? `turn-${Date.now()}` : undefined) || `turn-${Date.now()}`;
-        const sessionId = (typeof session === 'string' ? session : session?.id) || data.sessionId || 'unknown-session';
+        const sessionId = (typeof session === 'string' ? session : session?.id) || data.sessionId || getSessionIdFromCtx() || 'unknown-session';
+
+        // 若同一轮刚由 agent/error 上报过（3秒内），则不再用 turn/end 覆盖
+        if (lastErrorInfo && (Date.now() - lastErrorInfo.at < 3000) &&
+            (lastErrorInfo.turnId === turnId || lastErrorInfo.sessionId === sessionId || sessionId === 'unknown-session' || lastErrorInfo.sessionId === 'unknown-session')) {
+          if (lastErrorInfo.reported) {
+            debugLog(`turn/end skipped because agent/error already reported for ${sessionId}/${turnId}`);
+            return;
+          }
+        }
 
         if (!recordReportedTurn(sessionId, turnId)) return;
 
@@ -136,26 +147,37 @@ export function apply(ctx, config = {}) {
         }
 
         let status = 'completed';
-        if (data.status) {
-          const s = String(data.status).toLowerCase();
-          if (s === 'error' || s === 'failed') status = 'error';
-          else if (s === 'aborted' || s === 'cancelled' || s === 'canceled') status = 'aborted';
-          else if (s === 'completed' || s === 'success') status = 'completed';
+        const rawStatus = String(data.status || data.turn?.status || data.outcome || '').toLowerCase();
+        if (rawStatus) {
+          if (rawStatus.includes('err') || rawStatus.includes('fail')) status = 'error';
+          else if (rawStatus.includes('abort') || rawStatus.includes('cancel')) status = 'aborted';
+          else if (rawStatus.includes('complete') || rawStatus.includes('success') || rawStatus === 'done' || rawStatus === 'ok') status = 'completed';
           else status = 'unknown';
-        } else if (data.error) {
+        }
+        if (data.error || data.turn?.error || data.isError) {
           status = 'error';
         }
 
         let errorMessage = undefined;
-        if (data.error) {
-          const raw = data.error?.message ?? (typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+        const errObj = data.error || data.turn?.error;
+        if (errObj) {
+          const raw = errObj?.message ?? (typeof errObj === 'string' ? errObj : JSON.stringify(errObj));
           if (raw) errorMessage = String(raw).slice(0, 200);
+        } else if (status === 'error' && lastErrorInfo?.errorMessage) {
+          errorMessage = lastErrorInfo.errorMessage;
         }
 
         const summary = extractFirstLineSummary(data);
-        const title = summary ? `DeepSeek Harness: ${summary}` : 'DeepSeek Harness 执行完成';
+        const defaultTitle = status === 'error'
+          ? 'DeepSeek Harness 执行异常'
+          : status === 'aborted'
+          ? 'DeepSeek Harness 已中止'
+          : 'DeepSeek Harness 执行完成';
+        const title = summary ? `DeepSeek Harness: ${summary}` : defaultTitle;
 
-        let resultSummary = status === 'error' ? '任务异常，请检查错误日志' : '执行完成，请核对代码变动';
+        let resultSummary = status === 'error'
+          ? (errorMessage || '任务异常，请检查错误日志')
+          : '执行完成，请核对代码变动';
         if (status === 'aborted') resultSummary = '任务已中止';
         else if (status === 'unknown') resultSummary = '状态未知';
 
@@ -193,11 +215,12 @@ export function apply(ctx, config = {}) {
     ctx.on('agent/error', (arg1, arg2) => {
       try {
         debugLog(`agent/error received (不 JSON 序列化): keys=${arg1 && typeof arg1 === 'object' ? Object.keys(arg1).join(',') : typeof arg1}`);
-        let error, turn, step;
-        if (arg1 && typeof arg1 === 'object' && ('error' in arg1 || 'turn' in arg1)) {
-          error = arg1.error;
+        let error, turn, step, agentObj;
+        if (arg1 && typeof arg1 === 'object' && ('error' in arg1 || 'turn' in arg1 || 'agent' in arg1)) {
+          error = arg1.error ?? arg2;
           turn = arg1.turn;
           step = arg1.step;
+          agentObj = arg1.agent;
         } else {
           error = arg1;
           turn = arg2;
@@ -207,7 +230,25 @@ export function apply(ctx, config = {}) {
         const rawError = error?.message ?? (typeof error === 'string' ? error : (error ? JSON.stringify(error) : 'Unknown error'));
         const errorMessage = String(rawError).slice(0, 200);
         const turnId = turn?.id || (typeof turn === 'string' ? turn : `turn-err-${Date.now()}`);
-        const sessionId = getSessionIdFromCtx() || 'unknown-session';
+
+        let activeSessionId = agentObj?.sessionId || agentObj?.session?.id || turn?.sessionId || getSessionIdFromCtx();
+        if (!activeSessionId) {
+          for (const [, v] of agentStateMap.entries()) {
+            if (v.sessionId && v.sessionId !== 'unknown-session') {
+              activeSessionId = v.sessionId;
+              break;
+            }
+          }
+        }
+        const sessionId = activeSessionId || 'unknown-session';
+
+        lastErrorInfo = {
+          sessionId,
+          turnId,
+          errorMessage,
+          at: Date.now(),
+          reported: true,
+        };
 
         if (!recordReportedTurn(sessionId, turnId)) return;
 
@@ -217,14 +258,14 @@ export function apply(ctx, config = {}) {
         }
 
         const summary = errorMessage.split(/[\r\n]+/)[0].trim().slice(0, 32);
-        const title = summary ? `DeepSeek Harness: ${summary}` : 'DeepSeek Harness 执行完成';
+        const title = summary ? `DeepSeek Harness: ${summary}` : 'DeepSeek Harness 执行异常';
 
         sendToAgentFloat({
           source: 'dsh',
           sessionId,
           turnId,
           title,
-          resultSummary: '任务异常，请检查错误日志',
+          resultSummary: errorMessage || '任务异常，请检查错误日志',
           status: 'error',
           errorMessage,
           cwd: getWorkspaceCwd(),
@@ -243,7 +284,6 @@ export function apply(ctx, config = {}) {
     ctx.on('agent/status', (arg1, arg2) => {
       try {
         debugLog(`agent/status received (不 JSON 序列化): arg1 keys=${arg1 && typeof arg1 === 'object' ? Object.keys(arg1).join(',') : typeof arg1}, arg2=${typeof arg2 === 'string' ? arg2 : typeof arg2}`);
-        debugLog(`agent/status received (不 JSON 序列化，直接探测字段): arg1 keys=${arg1 && typeof arg1 === 'object' ? Object.keys(arg1).join(',') : typeof arg1}`);
         let agent, status;
         if (arg1 && typeof arg1 === 'object' && 'status' in arg1) {
           agent = arg1.agent;
@@ -259,7 +299,8 @@ export function apply(ctx, config = {}) {
 
         if (statusStr === 'running') {
           debugLog('agent/status running');
-          const sessionId = agent?.sessionId || agent?.session?.id || 'unknown-session';
+          const sessionId = agent?.sessionId || agent?.session?.id || getSessionIdFromCtx() || 'unknown-session';
+          lastErrorInfo = null;
           agentStateMap.set(agentKey, {
             startedAt: Date.now(),
             sessionId,
@@ -272,7 +313,8 @@ export function apply(ctx, config = {}) {
         if (state && !state.turnEndReported) {
           const now = Date.now();
           const durationMs = Math.max(0, now - state.startedAt);
-          if (durationMs >= minTurnDurationMs) {
+          const isErrorOrAbort = statusStr.includes('err') || statusStr.includes('fail') || statusStr.includes('abort') || statusStr.includes('cancel') || Boolean(lastErrorInfo);
+          if (durationMs >= minTurnDurationMs || isErrorOrAbort) {
             state.turnEndReported = true;
             const turnId = `turn-${now}`;
             const sessionId = state.sessionId || 'unknown-session';
@@ -282,12 +324,17 @@ export function apply(ctx, config = {}) {
             // 兜底上报：仅在 turn/end 与 agent/error 都未触发时到达；按非 running 状态映射，避免把异常误报为完成
             let fallbackStatus = 'completed';
             let fallbackResult = '执行完成，请核对代码变动';
-            if (statusStr === 'error' || statusStr === 'failed') {
+            let fallbackTitle = 'DeepSeek Harness 执行完成';
+            let fallbackError = undefined;
+            if (statusStr === 'error' || statusStr === 'failed' || lastErrorInfo) {
               fallbackStatus = 'error';
-              fallbackResult = '任务异常，请检查错误日志';
+              fallbackError = lastErrorInfo?.errorMessage;
+              fallbackResult = fallbackError || '任务异常，请检查错误日志';
+              fallbackTitle = 'DeepSeek Harness 执行异常';
             } else if (statusStr === 'aborted' || statusStr === 'cancelled' || statusStr === 'canceled') {
               fallbackStatus = 'aborted';
               fallbackResult = '任务已中止';
+              fallbackTitle = 'DeepSeek Harness 已中止';
             } else if (statusStr && statusStr !== 'idle' && statusStr !== 'completed' && statusStr !== 'success' && statusStr !== 'done') {
               fallbackStatus = 'unknown';
               fallbackResult = '状态未知';
@@ -297,9 +344,10 @@ export function apply(ctx, config = {}) {
               source: 'dsh',
               sessionId,
               turnId,
-              title: 'DeepSeek Harness 执行完成',
+              title: fallbackTitle,
               resultSummary: fallbackResult,
               status: fallbackStatus,
+              errorMessage: fallbackError,
               durationMs,
               cwd: getWorkspaceCwd(),
               metadata: { plugin: 'agentfloat-dsh', event: 'agent/status' },

@@ -127,14 +127,16 @@ public struct AutoIntegrationManager: Sendable {
         norm_status = "completed"
 
     msg_snippet = ""
-    if msg:
-        first_line = str(msg).strip().split("\\n")[0].strip()
+    snippet_source = msg or error
+    if snippet_source:
+        first_line = str(snippet_source).strip().split("\\n")[0].strip()
         if len(first_line) > 35:
             msg_snippet = first_line[:32] + "..."
         else:
             msg_snippet = first_line
 
-    final_title = data.get("title") or (f"Codex: {msg_snippet}" if msg_snippet else "Codex 执行完成")
+    default_title = "Codex 执行异常" if norm_status == "error" else ("Codex 任务已中止" if norm_status == "aborted" else "Codex 执行完成")
+    final_title = data.get("title") or (f"Codex: {msg_snippet}" if msg_snippet else default_title)
 
     output = {
         "thread_id": thread_id,
@@ -232,14 +234,16 @@ public struct AutoIntegrationManager: Sendable {
         norm_status = "completed"
 
     msg_snippet = ""
-    if msg:
-        first_line = str(msg).strip().split("\\n")[0].strip()
+    snippet_source = msg or error
+    if snippet_source:
+        first_line = str(snippet_source).strip().split("\\n")[0].strip()
         if len(first_line) > 35:
             msg_snippet = first_line[:32] + "..."
         else:
             msg_snippet = first_line
 
-    final_title = data.get("title") or (f"Claude: {msg_snippet}" if msg_snippet else "Claude 执行完成")
+    default_title = "Claude 执行异常" if norm_status == "error" else ("Claude 任务已中止" if norm_status == "aborted" else "Claude 执行完成")
+    final_title = data.get("title") or (f"Claude: {msg_snippet}" if msg_snippet else default_title)
 
     output = {
         "session_id": session_id,
@@ -331,7 +335,8 @@ public struct AutoIntegrationManager: Sendable {
     function extractPrompt(messages: any[]): string | undefined {
       if (!Array.isArray(messages)) return undefined;
       for (let i = messages.length - 1; i >= 0; i--) {
-        const msg = messages[i];
+        const item = messages[i];
+        const msg = item?.type === 'message' && item?.message ? item.message : item;
         if (msg?.role === 'user') {
           const content = msg.content;
           if (typeof content === 'string') return content;
@@ -363,42 +368,150 @@ public struct AutoIntegrationManager: Sendable {
       const serverUrl = process.env.AGENTFLOAT_URL || 'http://127.0.0.1:41920';
       let sessionStartTime = Date.now();
       let lastPrompt: string | undefined = undefined;
-      let reportedTurns = new Set<string>();
+      let lastOutcome: 'completed' | 'error' | 'aborted' = 'completed';
+      let lastErrorMessage: string | undefined = undefined;
+      let settleTimer: ReturnType<typeof setTimeout> | undefined = undefined;
 
       if (!pi || typeof pi.on !== 'function') return;
 
-      pi.on('before_agent_start', (_event: any, _ctx: any) => {
+      const resetRunState = () => {
         sessionStartTime = Date.now();
+        lastOutcome = 'completed';
+        lastErrorMessage = undefined;
+        if (settleTimer) {
+          clearTimeout(settleTimer);
+          settleTimer = undefined;
+        }
+      };
+
+      pi.on('before_agent_start', (event: any, _ctx: any) => {
+        resetRunState();
+        if (event?.prompt && typeof event.prompt === 'string') {
+          lastPrompt = event.prompt;
+        }
       });
 
       pi.on('agent_start', (_event: any, _ctx: any) => {
         sessionStartTime = Date.now();
+        if (settleTimer) {
+          clearTimeout(settleTimer);
+          settleTimer = undefined;
+        }
       });
 
       pi.on('message_end', (event: any, _ctx: any) => {
-        if (event?.message?.role === 'user') {
-          const content = event.message.content;
+        const msg = event?.message;
+        if (!msg) return;
+
+        if (msg.role === 'user') {
+          const content = msg.content;
           if (typeof content === 'string') {
             lastPrompt = content;
           } else if (Array.isArray(content)) {
             const textItem = content.find((c: any) => c.type === 'text');
             if (textItem?.text) lastPrompt = textItem.text;
           }
+        } else if (msg.role === 'assistant') {
+          if (msg.stopReason === 'error' || msg.errorMessage) {
+            lastOutcome = 'error';
+            if (msg.errorMessage) {
+              lastErrorMessage = String(msg.errorMessage);
+            }
+          } else if (msg.stopReason === 'aborted') {
+            lastOutcome = 'aborted';
+          } else {
+            lastOutcome = 'completed';
+            lastErrorMessage = undefined;
+          }
         }
       });
 
-      const handleTurnFinish = async (isAborted: boolean, ctx: any, sourceEvent: string) => {
+      pi.on('turn_end', (event: any, _ctx: any) => {
+        if (event?.outcome === 'error') {
+          lastOutcome = 'error';
+          if (event?.message?.errorMessage) {
+            lastErrorMessage = String(event.message.errorMessage);
+          }
+        } else if (event?.outcome === 'aborted') {
+          lastOutcome = 'aborted';
+        } else if (event?.outcome === 'completed') {
+          lastOutcome = 'completed';
+          lastErrorMessage = undefined;
+        }
+      });
+
+      pi.on('agent_before_settle', (event: any, _ctx: any) => {
+        if (event?.outcome === 'error') {
+          lastOutcome = 'error';
+        } else if (event?.outcome === 'aborted') {
+          lastOutcome = 'aborted';
+        } else if (event?.outcome === 'completed') {
+          lastOutcome = 'completed';
+          lastErrorMessage = undefined;
+        }
+      });
+
+      const inspectMessagesOutcome = (messages: any[]): { outcome?: 'completed' | 'error' | 'aborted'; errorMessage?: string } => {
+        if (!Array.isArray(messages)) return {};
+        for (let i = messages.length - 1; i >= 0; i--) {
+          const msg = messages[i];
+          if (msg?.role === 'assistant') {
+            if (msg.stopReason === 'error' || msg.errorMessage) {
+              return {
+                outcome: 'error',
+                errorMessage: msg.errorMessage ? String(msg.errorMessage) : undefined,
+              };
+            }
+            if (msg.stopReason === 'aborted') {
+              return { outcome: 'aborted' };
+            }
+            return { outcome: 'completed' };
+          }
+        }
+        return {};
+      };
+
+      const handleTurnFinish = async (
+        options: { isAborted?: boolean; isError?: boolean; errorMessage?: string; messages?: any[] },
+        ctx: any,
+        sourceEvent: string
+      ) => {
         const now = Date.now();
         const durationMs = Math.max(0, now - sessionStartTime);
         const sessionId = sessionIdFor(ctx);
-        const turnKey = `${sessionId}-${Math.floor(now / 3000)}`;
-        if (reportedTurns.has(turnKey)) return;
-        reportedTurns.add(turnKey);
+
+        const branchEntries = ctx?.sessionManager?.getBranch?.() || [];
+        const branchMessages = branchEntries
+          .filter((e: any) => e?.type === 'message' && e?.message)
+          .map((e: any) => e.message);
+        const msgCheck = inspectMessagesOutcome(options.messages || branchMessages);
+
+        const isAborted = Boolean(options.isAborted) || lastOutcome === 'aborted' || msgCheck.outcome === 'aborted';
+        const isError = !isAborted && (Boolean(options.isError) || lastOutcome === 'error' || msgCheck.outcome === 'error');
+        const finalErrorMsg = isError
+          ? (options.errorMessage || lastErrorMessage || msgCheck.errorMessage || 'Agent 执行过程中发生异常')
+          : undefined;
+
+        const status: 'completed' | 'error' | 'aborted' = isAborted
+          ? 'aborted'
+          : isError
+          ? 'error'
+          : 'completed';
 
         const cwd = ctx?.cwd || process.cwd();
-        const prompt = lastPrompt || extractPrompt(ctx?.sessionManager?.getBranch?.() || []);
-        const title = prompt ? `Pi: ${truncate(prompt, 35)}` : 'Pi Agent 任务完成';
-        const status: 'completed' | 'aborted' = isAborted ? 'aborted' : 'completed';
+        const prompt = lastPrompt || extractPrompt(branchMessages.length > 0 ? branchMessages : branchEntries);
+        const defaultTitle = status === 'error'
+          ? 'Pi Agent 执行异常'
+          : status === 'aborted'
+          ? 'Pi Agent 任务已中止'
+          : 'Pi Agent 任务完成';
+        const title = prompt ? `Pi: ${truncate(prompt, 35)}` : defaultTitle;
+
+        const resultSummary = status === 'error'
+          ? truncate(finalErrorMsg || '任务异常，请检查错误日志', 120)
+          : status === 'aborted'
+          ? '用户中止当前任务'
+          : '执行完成，请核对代码变动';
 
         const payload: AgentFloatEventPayload = {
           source: 'pi',
@@ -406,9 +519,9 @@ public struct AutoIntegrationManager: Sendable {
           turnId: `turn-${now}`,
           title,
           promptSummary: prompt ? truncate(prompt, 120) : undefined,
-          resultSummary: isAborted ? '用户中止当前任务' : '执行完成，请核对代码变动',
+          resultSummary,
           status,
-          errorMessage: undefined,
+          errorMessage: finalErrorMsg ? truncate(finalErrorMsg, 200) : undefined,
           cwd,
           terminalApp: ctx?.terminalApp || process.env.TERM_PROGRAM || undefined,
           durationMs,
@@ -418,12 +531,36 @@ public struct AutoIntegrationManager: Sendable {
         await sendToAgentFloat(payload, serverUrl);
       };
 
-      pi.on('agent_end', async (_event: any, ctx: any) => {
-        await handleTurnFinish(false, ctx, 'agent_end');
+      pi.on('agent_end', (event: any, ctx: any) => {
+        const msgCheck = inspectMessagesOutcome(event?.messages);
+        if (msgCheck.outcome === 'error') {
+          lastOutcome = 'error';
+          if (msgCheck.errorMessage) lastErrorMessage = msgCheck.errorMessage;
+        } else if (msgCheck.outcome === 'aborted') {
+          lastOutcome = 'aborted';
+        }
+
+        if (settleTimer) clearTimeout(settleTimer);
+        settleTimer = setTimeout(() => {
+          settleTimer = undefined;
+          void handleTurnFinish({ messages: event?.messages }, ctx, 'agent_end');
+        }, 300);
       });
 
       pi.on('agent_settled', async (event: any, ctx: any) => {
-        await handleTurnFinish(Boolean(event?.aborted), ctx, 'agent_settled');
+        if (settleTimer) {
+          clearTimeout(settleTimer);
+          settleTimer = undefined;
+        }
+        await handleTurnFinish(
+          {
+            isAborted: Boolean(event?.aborted),
+            isError: event?.outcome === 'error' || Boolean(event?.error),
+            errorMessage: event?.errorMessage || (typeof event?.error === 'string' ? event.error : event?.error?.message),
+          },
+          ctx,
+          'agent_settled'
+        );
       });
     }
 
@@ -487,7 +624,8 @@ public struct AutoIntegrationManager: Sendable {
 
     function extractFirstLineSummary(data) {
       if (!data) return '';
-      const candidate = data.summary || data.title || data.lastAssistantMessage || data.message || data.prompt || '';
+      const errText = data.error?.message ?? (typeof data.error === 'string' ? data.error : '');
+      const candidate = data.summary || data.title || data.lastAssistantMessage || data.message || errText || data.prompt || '';
       if (typeof candidate !== 'string' || !candidate.trim()) return '';
       const firstLine = candidate.trim().split(/[\r\n]+/)[0].trim();
       return firstLine.slice(0, 32);
@@ -566,6 +704,7 @@ public struct AutoIntegrationManager: Sendable {
 
       const agentStateMap = new Map();
       const reportedTurns = new Set();
+      let lastErrorInfo = null; // 记录最近一次 agent/error，防止 turn/end 无 error 字段或重复覆盖
 
       function recordReportedTurn(sessionId, turnId) {
         const key = `${sessionId}:${turnId}`;
@@ -590,7 +729,16 @@ public struct AutoIntegrationManager: Sendable {
 
             const data = event.data || {};
             const turnId = data.turnId || data.turn?.id || (data.status ? `turn-${Date.now()}` : undefined) || `turn-${Date.now()}`;
-            const sessionId = (typeof session === 'string' ? session : session?.id) || data.sessionId || 'unknown-session';
+            const sessionId = (typeof session === 'string' ? session : session?.id) || data.sessionId || getSessionIdFromCtx() || 'unknown-session';
+
+            // 若同一轮刚由 agent/error 上报过（3秒内），则不再用 turn/end 覆盖
+            if (lastErrorInfo && (Date.now() - lastErrorInfo.at < 3000) &&
+                (lastErrorInfo.turnId === turnId || lastErrorInfo.sessionId === sessionId || sessionId === 'unknown-session' || lastErrorInfo.sessionId === 'unknown-session')) {
+              if (lastErrorInfo.reported) {
+                debugLog(`turn/end skipped because agent/error already reported for ${sessionId}/${turnId}`);
+                return;
+              }
+            }
 
             if (!recordReportedTurn(sessionId, turnId)) return;
 
@@ -602,26 +750,37 @@ public struct AutoIntegrationManager: Sendable {
             }
 
             let status = 'completed';
-            if (data.status) {
-              const s = String(data.status).toLowerCase();
-              if (s === 'error' || s === 'failed') status = 'error';
-              else if (s === 'aborted' || s === 'cancelled' || s === 'canceled') status = 'aborted';
-              else if (s === 'completed' || s === 'success') status = 'completed';
+            const rawStatus = String(data.status || data.turn?.status || data.outcome || '').toLowerCase();
+            if (rawStatus) {
+              if (rawStatus.includes('err') || rawStatus.includes('fail')) status = 'error';
+              else if (rawStatus.includes('abort') || rawStatus.includes('cancel')) status = 'aborted';
+              else if (rawStatus.includes('complete') || rawStatus.includes('success') || rawStatus === 'done' || rawStatus === 'ok') status = 'completed';
               else status = 'unknown';
-            } else if (data.error) {
+            }
+            if (data.error || data.turn?.error || data.isError) {
               status = 'error';
             }
 
             let errorMessage = undefined;
-            if (data.error) {
-              const raw = data.error?.message ?? (typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+            const errObj = data.error || data.turn?.error;
+            if (errObj) {
+              const raw = errObj?.message ?? (typeof errObj === 'string' ? errObj : JSON.stringify(errObj));
               if (raw) errorMessage = String(raw).slice(0, 200);
+            } else if (status === 'error' && lastErrorInfo?.errorMessage) {
+              errorMessage = lastErrorInfo.errorMessage;
             }
 
             const summary = extractFirstLineSummary(data);
-            const title = summary ? `DeepSeek Harness: ${summary}` : 'DeepSeek Harness 执行完成';
+            const defaultTitle = status === 'error'
+              ? 'DeepSeek Harness 执行异常'
+              : status === 'aborted'
+              ? 'DeepSeek Harness 已中止'
+              : 'DeepSeek Harness 执行完成';
+            const title = summary ? `DeepSeek Harness: ${summary}` : defaultTitle;
 
-            let resultSummary = status === 'error' ? '任务异常，请检查错误日志' : '执行完成，请核对代码变动';
+            let resultSummary = status === 'error'
+              ? (errorMessage || '任务异常，请检查错误日志')
+              : '执行完成，请核对代码变动';
             if (status === 'aborted') resultSummary = '任务已中止';
             else if (status === 'unknown') resultSummary = '状态未知';
 
@@ -659,11 +818,12 @@ public struct AutoIntegrationManager: Sendable {
         ctx.on('agent/error', (arg1, arg2) => {
           try {
             debugLog(`agent/error received (不 JSON 序列化): keys=${arg1 && typeof arg1 === 'object' ? Object.keys(arg1).join(',') : typeof arg1}`);
-            let error, turn, step;
-            if (arg1 && typeof arg1 === 'object' && ('error' in arg1 || 'turn' in arg1)) {
-              error = arg1.error;
+            let error, turn, step, agentObj;
+            if (arg1 && typeof arg1 === 'object' && ('error' in arg1 || 'turn' in arg1 || 'agent' in arg1)) {
+              error = arg1.error ?? arg2;
               turn = arg1.turn;
               step = arg1.step;
+              agentObj = arg1.agent;
             } else {
               error = arg1;
               turn = arg2;
@@ -673,7 +833,25 @@ public struct AutoIntegrationManager: Sendable {
             const rawError = error?.message ?? (typeof error === 'string' ? error : (error ? JSON.stringify(error) : 'Unknown error'));
             const errorMessage = String(rawError).slice(0, 200);
             const turnId = turn?.id || (typeof turn === 'string' ? turn : `turn-err-${Date.now()}`);
-            const sessionId = getSessionIdFromCtx() || 'unknown-session';
+
+            let activeSessionId = agentObj?.sessionId || agentObj?.session?.id || turn?.sessionId || getSessionIdFromCtx();
+            if (!activeSessionId) {
+              for (const [, v] of agentStateMap.entries()) {
+                if (v.sessionId && v.sessionId !== 'unknown-session') {
+                  activeSessionId = v.sessionId;
+                  break;
+                }
+              }
+            }
+            const sessionId = activeSessionId || 'unknown-session';
+
+            lastErrorInfo = {
+              sessionId,
+              turnId,
+              errorMessage,
+              at: Date.now(),
+              reported: true,
+            };
 
             if (!recordReportedTurn(sessionId, turnId)) return;
 
@@ -683,14 +861,14 @@ public struct AutoIntegrationManager: Sendable {
             }
 
             const summary = errorMessage.split(/[\r\n]+/)[0].trim().slice(0, 32);
-            const title = summary ? `DeepSeek Harness: ${summary}` : 'DeepSeek Harness 执行完成';
+            const title = summary ? `DeepSeek Harness: ${summary}` : 'DeepSeek Harness 执行异常';
 
             sendToAgentFloat({
               source: 'dsh',
               sessionId,
               turnId,
               title,
-              resultSummary: '任务异常，请检查错误日志',
+              resultSummary: errorMessage || '任务异常，请检查错误日志',
               status: 'error',
               errorMessage,
               cwd: getWorkspaceCwd(),
@@ -709,7 +887,6 @@ public struct AutoIntegrationManager: Sendable {
         ctx.on('agent/status', (arg1, arg2) => {
           try {
             debugLog(`agent/status received (不 JSON 序列化): arg1 keys=${arg1 && typeof arg1 === 'object' ? Object.keys(arg1).join(',') : typeof arg1}, arg2=${typeof arg2 === 'string' ? arg2 : typeof arg2}`);
-            debugLog(`agent/status received (不 JSON 序列化，直接探测字段): arg1 keys=${arg1 && typeof arg1 === 'object' ? Object.keys(arg1).join(',') : typeof arg1}`);
             let agent, status;
             if (arg1 && typeof arg1 === 'object' && 'status' in arg1) {
               agent = arg1.agent;
@@ -725,7 +902,8 @@ public struct AutoIntegrationManager: Sendable {
 
             if (statusStr === 'running') {
               debugLog('agent/status running');
-              const sessionId = agent?.sessionId || agent?.session?.id || 'unknown-session';
+              const sessionId = agent?.sessionId || agent?.session?.id || getSessionIdFromCtx() || 'unknown-session';
+              lastErrorInfo = null;
               agentStateMap.set(agentKey, {
                 startedAt: Date.now(),
                 sessionId,
@@ -738,7 +916,8 @@ public struct AutoIntegrationManager: Sendable {
             if (state && !state.turnEndReported) {
               const now = Date.now();
               const durationMs = Math.max(0, now - state.startedAt);
-              if (durationMs >= minTurnDurationMs) {
+              const isErrorOrAbort = statusStr.includes('err') || statusStr.includes('fail') || statusStr.includes('abort') || statusStr.includes('cancel') || Boolean(lastErrorInfo);
+              if (durationMs >= minTurnDurationMs || isErrorOrAbort) {
                 state.turnEndReported = true;
                 const turnId = `turn-${now}`;
                 const sessionId = state.sessionId || 'unknown-session';
@@ -748,12 +927,17 @@ public struct AutoIntegrationManager: Sendable {
                 // 兜底上报：仅在 turn/end 与 agent/error 都未触发时到达；按非 running 状态映射，避免把异常误报为完成
                 let fallbackStatus = 'completed';
                 let fallbackResult = '执行完成，请核对代码变动';
-                if (statusStr === 'error' || statusStr === 'failed') {
+                let fallbackTitle = 'DeepSeek Harness 执行完成';
+                let fallbackError = undefined;
+                if (statusStr === 'error' || statusStr === 'failed' || lastErrorInfo) {
                   fallbackStatus = 'error';
-                  fallbackResult = '任务异常，请检查错误日志';
+                  fallbackError = lastErrorInfo?.errorMessage;
+                  fallbackResult = fallbackError || '任务异常，请检查错误日志';
+                  fallbackTitle = 'DeepSeek Harness 执行异常';
                 } else if (statusStr === 'aborted' || statusStr === 'cancelled' || statusStr === 'canceled') {
                   fallbackStatus = 'aborted';
                   fallbackResult = '任务已中止';
+                  fallbackTitle = 'DeepSeek Harness 已中止';
                 } else if (statusStr && statusStr !== 'idle' && statusStr !== 'completed' && statusStr !== 'success' && statusStr !== 'done') {
                   fallbackStatus = 'unknown';
                   fallbackResult = '状态未知';
@@ -763,9 +947,10 @@ public struct AutoIntegrationManager: Sendable {
                   source: 'dsh',
                   sessionId,
                   turnId,
-                  title: 'DeepSeek Harness 执行完成',
+                  title: fallbackTitle,
                   resultSummary: fallbackResult,
                   status: fallbackStatus,
+                  errorMessage: fallbackError,
                   durationMs,
                   cwd: getWorkspaceCwd(),
                   metadata: { plugin: 'agentfloat-dsh', event: 'agent/status' },

@@ -285,6 +285,31 @@ public final class TaskManager: ObservableObject {
         return saved
     }
     
+    /// 解析任务状态（兼容大小写、同义词及 errorMessage 存在性判定）
+    nonisolated public static func resolveStatus(rawStatus: String?, errorMessage: String?) -> TaskStatus {
+        let trimmedError = errorMessage?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !trimmedError.isEmpty {
+            return .error
+        }
+        let raw = rawStatus?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        if raw.isEmpty {
+            return .completed
+        }
+        if let exact = TaskStatus(rawValue: raw) {
+            return exact
+        }
+        if raw.contains("abort") || raw.contains("cancel") {
+            return .aborted
+        }
+        if raw.contains("err") || raw.contains("fail") {
+            return .error
+        }
+        if raw.contains("complete") || raw.contains("success") || raw == "done" || raw == "ok" {
+            return .completed
+        }
+        return .unknown
+    }
+    
     /// 处理 Codex CLI notification
     @discardableResult
     public func ingestCodexNotification(payload: CodexNotificationPayload) async throws -> AgentTask {
@@ -292,22 +317,15 @@ public final class TaskManager: ObservableObject {
         let turnId = payload.turnId?.isEmpty == false ? payload.turnId! : UUID().uuidString
         let cwd = payload.cwd
         
-        // 状态识别
-        let status: TaskStatus
-        let rawStatus = payload.status?.lowercased() ?? ""
-        if let err = payload.error, !err.isEmpty {
-            status = .error
-        } else if rawStatus.contains("abort") || rawStatus.contains("cancel") {
-            status = .aborted
-        } else if rawStatus.contains("err") || rawStatus.contains("fail") {
-            status = .error
-        } else if rawStatus.contains("success") || rawStatus.contains("complete") || rawStatus.isEmpty {
-            status = .completed
-        } else {
-            status = .unknown
-        }
-        
-        let title = payload.title?.isEmpty == false ? payload.title! : "Codex Turn 执行完成"
+        let status = Self.resolveStatus(rawStatus: payload.status, errorMessage: payload.error)
+        let defaultTitle: String = {
+            switch status {
+            case .error: return "Codex 执行异常"
+            case .aborted: return "Codex 任务已中止"
+            case .completed, .unknown: return "Codex Turn 执行完成"
+            }
+        }()
+        let title = payload.title?.isEmpty == false ? payload.title! : defaultTitle
         let resultSummary = payload.lastAssistantMessage
         
         return try await ingestTask(
@@ -333,22 +351,15 @@ public final class TaskManager: ObservableObject {
         let turnId = payload.turnId?.isEmpty == false ? payload.turnId! : UUID().uuidString
         let cwd = payload.cwd
         
-        // 状态识别
-        let status: TaskStatus
-        let rawStatus = payload.status?.lowercased() ?? ""
-        if let err = payload.error, !err.isEmpty {
-            status = .error
-        } else if rawStatus.contains("abort") || rawStatus.contains("cancel") {
-            status = .aborted
-        } else if rawStatus.contains("err") || rawStatus.contains("fail") {
-            status = .error
-        } else if rawStatus.contains("success") || rawStatus.contains("complete") || rawStatus.isEmpty {
-            status = .completed
-        } else {
-            status = .unknown
-        }
-        
-        let title = payload.title?.isEmpty == false ? payload.title! : "Claude 执行完成"
+        let status = Self.resolveStatus(rawStatus: payload.status, errorMessage: payload.error)
+        let defaultTitle: String = {
+            switch status {
+            case .error: return "Claude 执行异常"
+            case .aborted: return "Claude 任务已中止"
+            case .completed, .unknown: return "Claude 执行完成"
+            }
+        }()
+        let title = payload.title?.isEmpty == false ? payload.title! : defaultTitle
         let resultSummary = payload.lastAssistantMessage
         
         return try await ingestTask(
