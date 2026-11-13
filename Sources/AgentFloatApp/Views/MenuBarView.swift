@@ -5,6 +5,7 @@ import AgentFloatCore
 public struct MenuBarView: View {
     @ObservedObject public var taskManager: TaskManager
     @ObservedObject private var launchAtLogin = LaunchAtLoginManager.shared
+    @ObservedObject private var styleManager = PanelStyleManager.shared
     public let serverPort: UInt16
     
     public init(taskManager: TaskManager, serverPort: UInt16 = 41920) {
@@ -98,37 +99,56 @@ public struct MenuBarView: View {
             Divider()
             
             // 设置与环境联动控制栏
-            HStack(spacing: 8) {
-                Toggle(isOn: Binding(
-                    get: { launchAtLogin.isEnabled },
-                    set: { launchAtLogin.set(enabled: $0) }
-                )) {
-                    Text("开机自启动")
+            VStack(spacing: 6) {
+                HStack(spacing: 8) {
+                    Text("悬浮窗样式")
                         .font(.system(size: 11))
-                }
-                .toggleStyle(.checkbox)
-                
-                Spacer()
-                
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(Color.green)
-                        .frame(width: 5, height: 5)
-                    Text("自动联动")
-                        .font(.system(size: 10))
                         .foregroundColor(.secondary)
+                    
+                    Spacer()
+                    
+                    Picker("", selection: $styleManager.style) {
+                        ForEach(FloatingPanelStyle.allCases, id: \.self) { item in
+                            Text(item.displayName).tag(item)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .controlSize(.small)
+                    .frame(width: 150)
                 }
                 
-                Button("重新检测") {
-                    _ = AutoIntegrationManager.autoSetupAll()
+                HStack(spacing: 8) {
+                    Toggle(isOn: Binding(
+                        get: { launchAtLogin.isEnabled },
+                        set: { launchAtLogin.set(enabled: $0) }
+                    )) {
+                        Text("开机自启动")
+                            .font(.system(size: 11))
+                    }
+                    .toggleStyle(.checkbox)
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 5, height: 5)
+                        Text("自动联动")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Button("重新检测") {
+                        _ = AutoIntegrationManager.autoSetupAll()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10))
+                    .foregroundColor(.accentColor)
+                    .help("重新检测并修复本地 Codex、Pi Agent、Claude CLI 与 DeepSeek Harness 联动配置")
                 }
-                .buttonStyle(.plain)
-                .font(.system(size: 10))
-                .foregroundColor(.accentColor)
-                .help("重新检测并修复本地 Codex、Pi Agent、Claude CLI 与 DeepSeek Harness 联动配置")
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 6)
+            .padding(.vertical, 7)
             .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
             
             Divider()
@@ -188,6 +208,9 @@ public struct MenuBarView: View {
             HStack(spacing: 6) {
                 Button("显示卡片") {
                     taskManager.showCard(for: task)
+                    if styleManager.style == .dynamicIsland {
+                        styleManager.expandIsland(pin: true)
+                    }
                 }
                 .buttonStyle(.borderless)
                 .font(.system(size: 10.5))

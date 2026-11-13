@@ -417,7 +417,11 @@ public final class TaskManager: ObservableObject {
     /// 重新在卡片中展示指定待处理任务
     public func showCard(for task: AgentTask) {
         self.currentCardTask = task
-        self.onCardTaskChanged?(task)
+        Task {
+            try? await store.markCardUndismissed(id: task.id)
+            await loadTasks()
+            self.onCardTaskChanged?(task)
+        }
     }
     
     /// 标记所有待处理任务为已处理

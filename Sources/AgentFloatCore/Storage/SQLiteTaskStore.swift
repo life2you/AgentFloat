@@ -478,6 +478,25 @@ public actor SQLiteTaskStore {
         }
     }
     
+    /// 恢复指定任务的卡片展示状态 (dismissed_card = 0)
+    public func markCardUndismissed(id: String) throws {
+        guard let db = db else { throw TaskStoreError.databaseOpenFailed("数据库未连接") }
+        let sql = "UPDATE tasks SET dismissed_card = 0, updated_at = ? WHERE id = ?;"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            throw TaskStoreError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+        defer { sqlite3_finalize(stmt) }
+        
+        let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+        sqlite3_bind_double(stmt, 1, Date().timeIntervalSince1970)
+        sqlite3_bind_text(stmt, 2, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        
+        guard sqlite3_step(stmt) == SQLITE_DONE else {
+            throw TaskStoreError.executionFailed(String(cString: sqlite3_errmsg(db)))
+        }
+    }
+    
     /// 隐藏所有未处理任务的悬浮卡片 (仅关闭弹窗，不标记为已处理)
     public func markAllCardsDismissed() throws {
         guard let db = db else { throw TaskStoreError.databaseOpenFailed("数据库未连接") }

@@ -121,4 +121,18 @@ public struct PanelGeometryHelper: Sendable {
         
         return (snappedFrame, position)
     }
+    
+    /// 计算灵动岛模式下的目标 Frame（水平居中于屏幕最顶端 bezel，与刘海/屏幕顶边无缝融合）
+    public static func calculateIslandFrame(
+        contentWidth: CGFloat,
+        contentHeight: CGFloat,
+        screenFrame: CGRect,
+        visibleFrame: CGRect,
+        topPadding: CGFloat = 0
+    ) -> CGRect {
+        let x = screenFrame.midX - (contentWidth / 2.0)
+        let topAnchorY = screenFrame.maxY - topPadding
+        let y = max(visibleFrame.minY + edgePadding, topAnchorY - contentHeight)
+        return CGRect(x: x.rounded(), y: y.rounded(), width: contentWidth, height: contentHeight)
+    }
 }

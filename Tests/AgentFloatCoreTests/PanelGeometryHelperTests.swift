@@ -110,4 +110,63 @@ struct PanelGeometryHelperTests {
         #expect(snapped.maxX <= 1920 - 16)
         #expect(snapped.minY >= 16)
     }
+    
+    @Test("灵动岛顶部水平居中定位与展开向下延伸")
+    func dynamicIslandCenteredFrameCalculation() {
+        let screenFrame = CGRect(x: 0, y: 0, width: 1512, height: 982)
+        let visibleFrame = CGRect(x: 0, y: 0, width: 1512, height: 944)
+        
+        // 紧凑胶囊态 (284 x 32)
+        let collapsed = PanelGeometryHelper.calculateIslandFrame(
+            contentWidth: 284,
+            contentHeight: 32,
+            screenFrame: screenFrame,
+            visibleFrame: visibleFrame,
+            topPadding: 0
+        )
+        #expect(collapsed.width == 284)
+        #expect(collapsed.height == 32)
+        #expect(collapsed.midX == screenFrame.midX)
+        #expect(collapsed.maxY == screenFrame.maxY)
+        
+        // 完整展开态 (500 x 190)：顶部锚点不变，向下展开且保持水平居中
+        let expanded = PanelGeometryHelper.calculateIslandFrame(
+            contentWidth: 500,
+            contentHeight: 190,
+            screenFrame: screenFrame,
+            visibleFrame: visibleFrame,
+            topPadding: 0
+        )
+        #expect(expanded.width == 500)
+        #expect(expanded.height == 190)
+        #expect(expanded.midX == screenFrame.midX)
+        #expect(expanded.maxY == collapsed.maxY)
+    }
+    
+    @Test("PanelStyleManager 状态流转与样式切换")
+    @MainActor
+    func panelStyleManagerStateTransitions() {
+        let manager = PanelStyleManager()
+        manager.style = .dynamicIsland
+        manager.collapseIsland()
+        #expect(manager.islandState == .collapsed)
+        
+        let task = AgentTask(title: "测试任务", status: .completed)
+        manager.handleTasksUpdated([task])
+        // 新任务到达时从 collapsed 自动进入 peeking
+        #expect(manager.islandState == .peeking)
+        
+        manager.expandIsland()
+        #expect(manager.islandState == .expanded)
+        
+        // 清空任务后自动回到 collapsed
+        manager.handleTasksUpdated([])
+        #expect(manager.islandState == .collapsed)
+        
+        // 切换模式
+        manager.toggleStyle()
+        #expect(manager.style == .card)
+        manager.toggleStyle()
+        #expect(manager.style == .dynamicIsland)
+    }
 }

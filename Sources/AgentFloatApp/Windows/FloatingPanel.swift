@@ -6,12 +6,14 @@ public final class FloatingPanel: NSPanel {
     private static let positionStorageKey = "AgentFloat_FloatingPanelPosition"
     
     public let taskManager: TaskManager
+    public let styleManager: PanelStyleManager
     private var hostingView: NSHostingView<FloatingCardView>?
     private var moveDebounceWorkItem: DispatchWorkItem?
     private var isSnapping = false
     
-    public init(taskManager: TaskManager) {
+    public init(taskManager: TaskManager, styleManager: PanelStyleManager = .shared) {
         self.taskManager = taskManager
+        self.styleManager = styleManager
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 350, height: 180),
             styleMask: [.nonactivatingPanel, .fullSizeContentView, .borderless],
@@ -25,16 +27,24 @@ public final class FloatingPanel: NSPanel {
         self.isOpaque = false
         self.backgroundColor = .clear
         self.hasShadow = true
-        self.isMovableByWindowBackground = true
+        self.isMovableByWindowBackground = (styleManager.style == .card)
         self.hidesOnDeactivate = false
         
-        let cardView = FloatingCardView(taskManager: taskManager)
+        let cardView = FloatingCardView(taskManager: taskManager, styleManager: styleManager)
         let hosting = NSHostingView(rootView: cardView)
         hosting.translatesAutoresizingMaskIntoConstraints = false
         self.hostingView = hosting
         self.contentView = hosting
         
-        // 监听窗口移动，实现拖拽停止后的自动防抖吸附与位置记忆
+        styleManager.onStyleOrStateChanged = { [weak self] in
+            guard let self = self else { return }
+            self.isMovableByWindowBackground = (self.styleManager.style == .card)
+            DispatchQueue.main.async {
+                self.recalculateLayout(animated: true)
+            }
+        }
+        
+        // 监听窗口移动，实现拖拽停止后的自动防抖吸附与位置记忆（仅经典卡片模式）
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(windowDidMoveHandler),
@@ -55,44 +65,108 @@ public final class FloatingPanel: NSPanel {
         return false
     }
     
+    override public func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        if styleManager.style == .dynamicIsland {
+            return frameRect
+        }
+        return super.constrainFrameRect(frameRect, to: screen)
+    }
+    
     override public func sendEvent(_ event: NSEvent) {
         super.sendEvent(event)
-        // 用户鼠标松开拖动时，立即触发边缘磁吸与位置持久化
-        if event.type == .leftMouseUp && self.isVisible {
+        // 用户鼠标松开拖动时，立即触发边缘磁吸与位置持久化（仅在经典卡片模式生效）
+        if styleManager.style == .card && event.type == .leftMouseUp && self.isVisible {
             moveDebounceWorkItem?.cancel()
             snapToNearestEdgeAndSave(animated: true)
         }
     }
     
     public func updateVisibility() {
-        if taskManager.undismissedTasks.isEmpty {
+        let tasks = taskManager.undismissedTasks
+        styleManager.handleTasksUpdated(tasks)
+        
+        if tasks.isEmpty {
             self.orderOut(nil)
             return
         }
         
-        guard let hosting = self.hostingView else { return }
-        let fittingSize = hosting.fittingSize
-        let finalWidth: CGFloat = 350
-        let finalHeight = min(max(fittingSize.height, 90), 420)
-        
-        guard let screen = self.screen ?? NSScreen.main ?? NSScreen.screens.first else {
-            self.orderFrontRegardless()
-            return
-        }
-        
-        let savedPosition = loadSavedPosition()
-        let targetFrame = PanelGeometryHelper.calculateFrame(
-            saved: savedPosition,
-            contentWidth: finalWidth,
-            contentHeight: finalHeight,
-            visibleFrame: screen.visibleFrame
-        )
-        
-        self.setFrame(targetFrame, display: true)
+        recalculateLayout(animated: self.isVisible)
         self.orderFrontRegardless()
     }
     
+    public func recalculateLayout(animated: Bool = false) {
+        guard !taskManager.undismissedTasks.isEmpty else {
+            self.orderOut(nil)
+            return
+        }
+        guard let hosting = self.hostingView else { return }
+        hosting.layoutSubtreeIfNeeded()
+        let fittingSize = hosting.fittingSize
+        
+        guard let screen = self.screen ?? NSScreen.main ?? NSScreen.screens.first else {
+            return
+        }
+        
+        let targetFrame: NSRect
+        switch styleManager.style {
+        case .dynamicIsland:
+            self.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.statusWindow)) + 1)
+            self.isMovableByWindowBackground = false
+            let islandWidth: CGFloat
+            let finalHeight: CGFloat
+            switch styleManager.islandState {
+            case .collapsed:
+                islandWidth = 276
+                finalHeight = 28
+            case .peeking:
+                islandWidth = 460
+                finalHeight = 62
+            case .expanded:
+                islandWidth = 528
+                finalHeight = 96
+            }
+            targetFrame = PanelGeometryHelper.calculateIslandFrame(
+                contentWidth: islandWidth,
+                contentHeight: finalHeight,
+                screenFrame: screen.frame,
+                visibleFrame: screen.visibleFrame,
+                topPadding: 0
+            )
+            
+        case .card:
+            self.level = .floating
+            self.isMovableByWindowBackground = true
+            let finalWidth: CGFloat = 350
+            let finalHeight = min(max(fittingSize.height, 90), 420)
+            let savedPosition = loadSavedPosition()
+            targetFrame = PanelGeometryHelper.calculateFrame(
+                saved: savedPosition,
+                contentWidth: finalWidth,
+                contentHeight: finalHeight,
+                visibleFrame: screen.visibleFrame
+            )
+        }
+        
+        if animated && self.isVisible && self.frame != targetFrame {
+            self.isSnapping = true
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = 0.22
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                self.animator().setFrame(targetFrame, display: true)
+            }, completionHandler: { [weak self] in
+                self?.isSnapping = false
+                self?.invalidateShadow()
+            })
+        } else {
+            self.setFrame(targetFrame, display: true)
+            self.invalidateShadow()
+        }
+    }
+    
     public func showCard(task: AgentTask, taskManager: TaskManager) {
+        if styleManager.style == .dynamicIsland {
+            styleManager.expandIsland()
+        }
         updateVisibility()
     }
     
@@ -101,7 +175,7 @@ public final class FloatingPanel: NSPanel {
     }
     
     @objc private func windowDidMoveHandler() {
-        guard self.isVisible, !isSnapping else { return }
+        guard styleManager.style == .card, self.isVisible, !isSnapping else { return }
         moveDebounceWorkItem?.cancel()
         let workItem = DispatchWorkItem { [weak self] in
             self?.snapToNearestEdgeAndSave(animated: true)
@@ -112,7 +186,7 @@ public final class FloatingPanel: NSPanel {
     
     /// 执行屏幕边缘磁吸并保存位置偏好
     public func snapToNearestEdgeAndSave(animated: Bool = true) {
-        guard !isSnapping else { return }
+        guard styleManager.style == .card, !isSnapping else { return }
         guard let screen = self.screen ?? NSScreen.main ?? NSScreen.screens.first else { return }
         
         let visibleFrame = screen.visibleFrame

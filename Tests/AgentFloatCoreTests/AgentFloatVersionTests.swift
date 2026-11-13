@@ -8,6 +8,6 @@ struct AgentFloatVersionTests {
         let version = AgentFloatVersion.current
         #expect(!version.isEmpty)
         #expect(version.contains("."))
-        #expect(AgentFloatVersion.string == "1.0.12")
+        #expect(AgentFloatVersion.string == "1.0.13")
     }
 }
