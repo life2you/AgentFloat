@@ -2,6 +2,19 @@
 
 所有重要的项目演进与版本更迭均记录于此。遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 规范。
 
+## [1.0.14] - 2026-11-17
+
+### 修复与优化 (Fixed & Improved)
+- **修复 Claude Code (CLI) 执行报错或 API 异常时被误报为“通过/执行完成”的问题**:
+  - **双钩子联动挂载 (`Stop` + `StopFailure`)**: `AutoIntegrationManager.setupClaude()` 不仅配置 `Stop` 钩子，还同步挂载 Claude Code 官方 `StopFailure` 生命周期，确保当 Claude 遇到 Rate Limit (429)、Overloaded、认证失败、网络异常等 API 错误时能立刻被 AgentFloat 捕获。
+  - **Hook 脚本多维度智能错误识别**: `claude-notify.sh` 与内置脚本模板彻底解决 Claude Code 原生 hook payload 不携带 `status` 字段而盲目回退为 `completed` 的问题。新增：
+    - 识别 `hook_event_name == "StopFailure"` 并直接标定为 `error`；
+    - 覆盖 `error_type`、`error_message`、`tool_error`、`denial_reason` 等所有错误字段；
+    - 快速读取分析 `transcript_path`（最后 32KB），精准识别该轮次末尾工具执行异常（`is_error: True`、`<tool_use_error>`、`Exit code [1-9]` 等）及 assistant `stop_reason`；
+    - 语义检测 `last_assistant_message` 中的明确报错前缀（`Error:`、`Command failed with exit code`、`Build failed`、`执行失败`、`测试失败` 等）与严重异常短语；
+    - 识别用户中断与取消状态（`aborted` / `cancel`）。
+  - **核心模型与端点增强**: `ClaudeNotificationPayload` 与 `ingestClaudeNotification` 增加对 `error_type`、`error_message`、`hook_event_name`、`transcript_path` 的解析与 `effectiveError` 深度判定，确保悬浮卡片准确高亮红色“执行异常 · 待查错”与“任务异常 · 请检查错误日志”。
+
 ## [1.0.13] - 2026-11-13
 
 ### 新增特性 (Added)

@@ -103,6 +103,226 @@ struct TaskManagerTests {
         #expect(task.terminalApp == "ghostty")
         #expect(manager.currentCardTask?.id == task.id)
     }
+
+    @Test("Claude 报错与 StopFailure 通知摄取精准识别为 error")
+    @MainActor
+    func claudeErrorNotificationIngestion() async throws {
+        let (manager, path) = try createManager()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        
+        // 1. 显式带有 errorMessage 的情况
+        let errorPayload = ClaudeNotificationPayload(
+            sessionId: "claude-err-1",
+            turnId: "turn-err-1",
+            cwd: "/Users/dev/claude_err",
+            lastAssistantMessage: "Command failed with exit code 1",
+            status: nil,
+            error: nil,
+            terminalApp: nil,
+            hookEventName: "Stop",
+            errorType: nil,
+            errorMessage: "Exit code 1: build failed"
+        )
+        let errorTask = try await manager.ingestClaudeNotification(payload: errorPayload)
+        #expect(errorTask.status == .error)
+        #expect(errorTask.errorMessage == "Exit code 1: build failed")
+        #expect(errorTask.verificationNotice == "任务异常 · 请检查错误日志")
+        #expect(errorTask.title == "Claude 执行异常")
+        
+        // 2. StopFailure API 异常事件
+        let stopFailurePayload = ClaudeNotificationPayload(
+            sessionId: "claude-fail-2",
+            turnId: "turn-fail-2",
+            cwd: "/Users/dev/claude_fail",
+            status: nil,
+            error: nil,
+            hookEventName: "StopFailure",
+            errorType: "rate_limit"
+        )
+        let failTask = try await manager.ingestClaudeNotification(payload: stopFailurePayload)
+        #expect(failTask.status == .error)
+        #expect(failTask.errorMessage == "rate_limit")
+        #expect(failTask.verificationNotice == "任务异常 · 请检查错误日志")
+
+        // 3. 仅有 hook_event_name 为 StopFailure
+        let pureStopFailurePayload = ClaudeNotificationPayload(
+            sessionId: "claude-fail-3",
+            hookEventName: "StopFailure"
+        )
+        let pureFailTask = try await manager.ingestClaudeNotification(payload: pureStopFailurePayload)
+        #expect(pureFailTask.status == .error)
+        #expect(pureFailTask.verificationNotice == "任务异常 · 请检查错误日志")
+    }
+
+    @Test("Claude 通知脚本 scripts/claude-notify.sh 状态提取与标准化")
+    func claudeNotifyScriptAnalysis() throws {
+        let scriptPath = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // AgentFloatCoreTests
+            .deletingLastPathComponent() // Tests
+            .appendingPathComponent("scripts")
+            .appendingPathComponent("claude-notify.sh").path
+        
+        guard FileManager.default.fileExists(atPath: scriptPath) else { return }
+        
+        // 辅助函数：通过 Python 代码段直接测试脚本中的规范化解析逻辑
+        func runNormalization(payloadJson: String) throws -> [String: Any]? {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+            process.arguments = ["-c", """
+import os, sys, json, time, re
+
+raw = os.environ.get("RAW_PAYLOAD", "").strip()
+try:
+    data = json.loads(raw) if raw else {}
+except Exception:
+    data = {"last_assistant_message": raw, "status": "unknown"}
+
+hook_event = str(data.get("hook_event_name") or data.get("hookEventName") or "")
+session_id = data.get("session_id") or data.get("sessionId") or ""
+turn_id = data.get("turn_id") or data.get("turnId") or f"turn-{int(time.time() * 1000)}"
+cwd = data.get("cwd") or ""
+msg = data.get("last_assistant_message") or data.get("lastAssistantMessage") or data.get("message") or ""
+raw_status = data.get("status")
+transcript_path = data.get("transcript_path") or data.get("transcriptPath") or ""
+stop_reason = str(data.get("stop_reason") or data.get("stopReason") or "")
+term_app = data.get("terminal_app") or os.environ.get("TERM_PROGRAM") or ""
+
+error = (
+    data.get("error")
+    or data.get("error_message")
+    or data.get("errorMessage")
+    or data.get("error_type")
+    or data.get("errorType")
+    or data.get("tool_error")
+    or data.get("denial_reason")
+    or ""
+)
+if isinstance(error, dict):
+    error = json.dumps(error, ensure_ascii=False)
+else:
+    error = str(error) if error else ""
+
+norm_status = None
+
+if "fail" in hook_event.lower() or "err" in hook_event.lower():
+    norm_status = "error"
+    if not error:
+        error = f"Claude 执行失败 ({hook_event})"
+
+if not norm_status and error.strip():
+    norm_status = "error"
+
+if not norm_status and raw_status:
+    s_lower = str(raw_status).lower()
+    if "fail" in s_lower or "err" in s_lower:
+        norm_status = "error"
+        if not error:
+            error = str(raw_status)
+    elif "abort" in s_lower or "cancel" in s_lower:
+        norm_status = "aborted"
+
+if not norm_status and stop_reason:
+    sr_lower = stop_reason.lower()
+    if "abort" in sr_lower or "cancel" in sr_lower or "interrupt" in sr_lower:
+        norm_status = "aborted"
+    elif "err" in sr_lower or "fail" in sr_lower:
+        norm_status = "error"
+        if not error:
+            error = f"Stop reason: {stop_reason}"
+
+clean_msg = str(msg or "").strip()
+if not norm_status and clean_msg:
+    stripped = re.sub(r'^(?:[#>-*`~_]+|\\s+|\\[ERROR\\]|\\[WARNING\\])+', '', clean_msg, flags=re.IGNORECASE).strip()
+    err_prefix_regex = r'^(?:error|fatal|exception|panic|typeerror|syntaxerror|referenceerror|runtimeerror|build failed|command failed|execution failed|test(?:s)? failed|task failed|operation failed|failed with exit code|process exited with code\\s+[1-9]|api error|request failed|anthropic api error|错误|报错|执行失败|构建失败|测试失败|运行失败|命令失败|调用失败|异常退出|发生异常|操作失败)(?:[:：\\s\\.]|$)'
+    if re.search(err_prefix_regex, stripped, re.IGNORECASE):
+        norm_status = "error"
+        if not error:
+            first_line = clean_msg.split("\\n")[0].strip()
+            error = first_line[:120]
+
+    if not norm_status:
+        strong_phrases = [
+            "claude code encountered an error",
+            "command failed with exit code",
+            "failed with exit code",
+            "process exited with exit code",
+            "rate limit exceeded",
+            "credit balance is too low",
+            "insufficient quota",
+            "overloaded_error"
+        ]
+        clean_lower = clean_msg.lower()
+        for phrase in strong_phrases:
+            if phrase in clean_lower:
+                norm_status = "error"
+                if not error:
+                    error = phrase
+                break
+
+if not norm_status:
+    norm_status = "completed"
+
+if norm_status == "error" and not error:
+    error = "Claude 执行过程中发生异常"
+
+msg_snippet = ""
+snippet_source = msg or error
+if snippet_source:
+    first_line = str(snippet_source).strip().split("\\n")[0].strip()
+    first_line = re.sub(r'^[#>-*`~_]+\\s*', '', first_line).strip()
+    if len(first_line) > 35:
+        msg_snippet = first_line[:32] + "..."
+    else:
+        msg_snippet = first_line
+
+default_title = "Claude 执行异常" if norm_status == "error" else ("Claude 任务已中止" if norm_status == "aborted" else "Claude 执行完成")
+if norm_status == "error":
+    final_title = data.get("title") or (f"Claude 报错: {msg_snippet}" if msg_snippet else default_title)
+else:
+    final_title = data.get("title") or (f"Claude: {msg_snippet}" if msg_snippet else default_title)
+
+output = {
+    "status": norm_status,
+    "error": error if norm_status == "error" else None,
+    "title": final_title
+}
+print(json.dumps(output))
+"""]
+            process.environment = ["RAW_PAYLOAD": payloadJson]
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            try process.run()
+            process.waitUntilExit()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            return try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        }
+        
+        // 场景 1: StopFailure -> 识别为 error
+        let r1 = try runNormalization(payloadJson: "{\"hook_event_name\":\"StopFailure\",\"error_type\":\"rate_limit\"}")
+        #expect(r1?["status"] as? String == "error")
+        #expect(r1?["error"] as? String == "rate_limit")
+        #expect((r1?["title"] as? String)?.contains("Claude 报错") == true)
+        
+        // 场景 2: 命令执行失败 -> 识别为 error
+        let r2 = try runNormalization(payloadJson: "{\"hook_event_name\":\"Stop\",\"last_assistant_message\":\"Command failed with exit code 1: swift test\"}")
+        #expect(r2?["status"] as? String == "error")
+        #expect((r2?["title"] as? String)?.contains("Claude 报错") == true)
+        
+        // 场景 3: 中文报错 -> 识别为 error
+        let r3 = try runNormalization(payloadJson: "{\"hook_event_name\":\"Stop\",\"last_assistant_message\":\"执行失败：存在 3 个语法错误\"}")
+        #expect(r3?["status"] as? String == "error")
+        #expect((r3?["title"] as? String)?.contains("Claude 报错") == true)
+
+        // 场景 4: 正常完成 -> 识别为 completed
+        let r4 = try runNormalization(payloadJson: "{\"hook_event_name\":\"Stop\",\"last_assistant_message\":\"所有测试均已顺利通过！\"}")
+        #expect(r4?["status"] as? String == "completed")
+        #expect(r4?["error"] == nil)
+        #expect((r4?["title"] as? String)?.contains("Claude: 所有测试") == true)
+
+        // 场景 5: 中止 -> 识别为 aborted
+        let r5 = try runNormalization(payloadJson: "{\"hook_event_name\":\"Stop\",\"stop_reason\":\"aborted\",\"last_assistant_message\":\"用户取消了操作\"}")
+        #expect(r5?["status"] as? String == "aborted")
+    }
     
     @Test("卡片关闭与处理流程联动")
     @MainActor

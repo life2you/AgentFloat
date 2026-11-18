@@ -113,6 +113,10 @@ public struct ClaudeNotificationPayload: Codable, Sendable {
     public var durationMs: Int?
     public var title: String?
     public var terminalApp: String?
+    public var hookEventName: String?
+    public var errorType: String?
+    public var errorMessage: String?
+    public var transcriptPath: String?
     
     enum CodingKeys: String, CodingKey {
         case sessionId = "session_id"
@@ -134,6 +138,18 @@ public struct ClaudeNotificationPayload: Codable, Sendable {
         case title
         case terminalApp = "terminal_app"
         case terminalAppAlt = "terminalApp"
+        
+        case hookEventName = "hook_event_name"
+        case hookEventNameAlt = "hookEventName"
+        
+        case errorType = "error_type"
+        case errorTypeAlt = "errorType"
+        
+        case errorMessage = "error_message"
+        case errorMessageAlt = "errorMessage"
+        
+        case transcriptPath = "transcript_path"
+        case transcriptPathAlt = "transcriptPath"
     }
     
     public init(
@@ -145,7 +161,11 @@ public struct ClaudeNotificationPayload: Codable, Sendable {
         error: String? = nil,
         durationMs: Int? = nil,
         title: String? = nil,
-        terminalApp: String? = nil
+        terminalApp: String? = nil,
+        hookEventName: String? = nil,
+        errorType: String? = nil,
+        errorMessage: String? = nil,
+        transcriptPath: String? = nil
     ) {
         self.sessionId = sessionId
         self.turnId = turnId
@@ -156,6 +176,10 @@ public struct ClaudeNotificationPayload: Codable, Sendable {
         self.durationMs = durationMs
         self.title = title
         self.terminalApp = terminalApp
+        self.hookEventName = hookEventName
+        self.errorType = errorType
+        self.errorMessage = errorMessage
+        self.transcriptPath = transcriptPath
     }
     
     public init(from decoder: Decoder) throws {
@@ -175,6 +199,14 @@ public struct ClaudeNotificationPayload: Codable, Sendable {
         self.title = try container.decodeIfPresent(String.self, forKey: .title)
         self.terminalApp = try container.decodeIfPresent(String.self, forKey: .terminalApp)
             ?? container.decodeIfPresent(String.self, forKey: .terminalAppAlt)
+        self.hookEventName = try container.decodeIfPresent(String.self, forKey: .hookEventName)
+            ?? container.decodeIfPresent(String.self, forKey: .hookEventNameAlt)
+        self.errorType = try container.decodeIfPresent(String.self, forKey: .errorType)
+            ?? container.decodeIfPresent(String.self, forKey: .errorTypeAlt)
+        self.errorMessage = try container.decodeIfPresent(String.self, forKey: .errorMessage)
+            ?? container.decodeIfPresent(String.self, forKey: .errorMessageAlt)
+        self.transcriptPath = try container.decodeIfPresent(String.self, forKey: .transcriptPath)
+            ?? container.decodeIfPresent(String.self, forKey: .transcriptPathAlt)
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -187,6 +219,11 @@ public struct ClaudeNotificationPayload: Codable, Sendable {
         try container.encodeIfPresent(error, forKey: .error)
         try container.encodeIfPresent(durationMs, forKey: .durationMs)
         try container.encodeIfPresent(title, forKey: .title)
+        try container.encodeIfPresent(terminalApp, forKey: .terminalApp)
+        try container.encodeIfPresent(hookEventName, forKey: .hookEventName)
+        try container.encodeIfPresent(errorType, forKey: .errorType)
+        try container.encodeIfPresent(errorMessage, forKey: .errorMessage)
+        try container.encodeIfPresent(transcriptPath, forKey: .transcriptPath)
     }
 }
 
@@ -351,7 +388,30 @@ public final class TaskManager: ObservableObject {
         let turnId = payload.turnId?.isEmpty == false ? payload.turnId! : UUID().uuidString
         let cwd = payload.cwd
         
-        let status = Self.resolveStatus(rawStatus: payload.status, errorMessage: payload.error)
+        let effectiveError: String? = {
+            if let err = payload.error?.trimmingCharacters(in: .whitespacesAndNewlines), !err.isEmpty {
+                return err
+            }
+            if let errMsg = payload.errorMessage?.trimmingCharacters(in: .whitespacesAndNewlines), !errMsg.isEmpty {
+                return errMsg
+            }
+            if let errType = payload.errorType?.trimmingCharacters(in: .whitespacesAndNewlines), !errType.isEmpty {
+                return errType
+            }
+            if let hook = payload.hookEventName?.lowercased(), hook.contains("fail") || hook.contains("err") {
+                return "Claude 执行异常 (\(payload.hookEventName!))"
+            }
+            return nil
+        }()
+        
+        var rawStatus = payload.status
+        if rawStatus == nil || rawStatus?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
+            if effectiveError != nil || payload.hookEventName?.lowercased().contains("fail") == true {
+                rawStatus = "error"
+            }
+        }
+        
+        let status = Self.resolveStatus(rawStatus: rawStatus, errorMessage: effectiveError)
         let defaultTitle: String = {
             switch status {
             case .error: return "Claude 执行异常"
@@ -370,7 +430,7 @@ public final class TaskManager: ObservableObject {
             promptSummary: nil,
             resultSummary: resultSummary,
             status: status,
-            errorMessage: payload.error,
+            errorMessage: effectiveError,
             cwd: cwd,
             terminalApp: payload.terminalApp,
             durationMs: payload.durationMs,
