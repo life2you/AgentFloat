@@ -153,7 +153,8 @@ public struct TerminalLauncher: Sendable {
         cwd: String?,
         preferredApp: String? = nil,
         sessionId: String? = nil,
-        source: String? = nil
+        source: String? = nil,
+        metadata: [String: String]? = nil
     ) -> Bool {
         let target = detectActiveTerminal(preferred: preferredApp, source: source)
         let bundleId = target.rawValue
@@ -198,7 +199,7 @@ public struct TerminalLauncher: Sendable {
         
         // 1. 如果目标终端是 Otty，优先通过 otty-cli 精确聚焦对应 Pane 与窗口
         if target == .otty {
-            if focusOttyPane(cwd: cwd, sessionId: sessionId, source: source) {
+            if focusOttyPane(cwd: cwd, sessionId: sessionId, source: source, metadata: metadata) {
                 bringToFront(bundleId: bundleId)
                 return true
             }
@@ -224,8 +225,169 @@ public struct TerminalLauncher: Sendable {
         return bringToFront(bundleId: bundleId)
     }
     
+    struct OttyPaneItem: Decodable, Equatable {
+        let id: String
+        let tab_id: String
+        let window_id: String
+        let cwd: String?
+        let agent: String?
+        let agent_session_id: String?
+        let process: String?
+    }
+
+    private struct OttyListResponse: Decodable {
+        let data: [OttyPaneItem]
+    }
+
+    static func normalizePath(_ path: String) -> String {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+        let expanded = (trimmed as NSString).expandingTildeInPath
+        let standardized = URL(fileURLWithPath: expanded).standardizedFileURL.path
+        if standardized.count > 1 && standardized.hasSuffix("/") {
+            return String(standardized.dropLast())
+        }
+        return standardized
+    }
+
+    static func isPath(_ path: String, equalOrInside ancestor: String) -> Bool {
+        guard !path.isEmpty, !ancestor.isEmpty else { return false }
+        if path == ancestor { return true }
+        if ancestor == "/" { return path.hasPrefix("/") }
+        return path.hasPrefix(ancestor + "/")
+    }
+
+    static func normalizeOttyPaneId(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("p_") {
+            return String(trimmed.dropFirst(2))
+        }
+        return trimmed
+    }
+
+    static func ottyAgentMatches(paneAgent: String?, source: String?) -> Bool {
+        guard let p = paneAgent?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines), !p.isEmpty,
+              let s = source?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else {
+            return false
+        }
+        if s == "agy" || s == "antigravity" {
+            return p.contains("antigravity") || p.contains("agy")
+        }
+        if s == "claude" {
+            return p.contains("claude")
+        }
+        if s == "codex" {
+            return p.contains("codex")
+        }
+        if s == "pi" {
+            return p == "pi" || p.hasPrefix("pi ") || p.contains("pi ")
+        }
+        return p.contains(s)
+    }
+
+    /// 精确匹配最符合条件的 Otty Pane（绝不回退到第一条无关 Tab）
+    static func selectBestOttyPane(
+        from panes: [OttyPaneItem],
+        cwd: String?,
+        sessionId: String?,
+        source: String?,
+        metadata: [String: String]? = nil,
+        homeDirectory: String = NSHomeDirectory()
+    ) -> OttyPaneItem? {
+        guard !panes.isEmpty else { return nil }
+
+        // 优先级 0: OTTY_PANE_ID 精确匹配
+        if let rawPaneId = metadata?["otty_pane_id"] ?? metadata?["pane_id"], !rawPaneId.isEmpty {
+            let targetNorm = normalizeOttyPaneId(rawPaneId)
+            if let exactPane = panes.first(where: { normalizeOttyPaneId($0.id) == targetNorm || $0.id == rawPaneId }) {
+                return exactPane
+            }
+        }
+
+        // 优先级 1: Session ID 匹配 (agent_session_id 或 process 参数中的会话 ID)
+        if let sId = sessionId?.trimmingCharacters(in: .whitespacesAndNewlines), !sId.isEmpty {
+            if let bySession = panes.first(where: { item in
+                if let pSession = item.agent_session_id, !pSession.isEmpty {
+                    if pSession == sId || pSession.contains(sId) || sId.contains(pSession) {
+                        return true
+                    }
+                }
+                if let proc = item.process, !proc.isEmpty, sId.count >= 8, proc.contains(sId) {
+                    return true
+                }
+                return false
+            }) {
+                return bySession
+            }
+        }
+
+        let normTaskCwd = cwd.map(normalizePath) ?? ""
+        let normHome = normalizePath(homeDirectory)
+
+        if !normTaskCwd.isEmpty {
+            // 优先级 2: 精确目录 + Agent 类型匹配
+            if let exactCwdAndAgent = panes.first(where: { item in
+                guard let pCwd = item.cwd, !pCwd.isEmpty else { return false }
+                return normalizePath(pCwd) == normTaskCwd && ottyAgentMatches(paneAgent: item.agent, source: source)
+            }) {
+                return exactCwdAndAgent
+            }
+
+            // 优先级 3: 精确目录匹配
+            if let exactCwd = panes.first(where: { item in
+                guard let pCwd = item.cwd, !pCwd.isEmpty else { return false }
+                return normalizePath(pCwd) == normTaskCwd
+            }) {
+                return exactCwd
+            }
+
+            // 优先级 4 & 5: 目录边界祖先/子目录匹配（优先匹配最近的祖先目录，且当 taskCwd 为用户主目录/根目录时禁止向下匹配任意子目录）
+            let allowChildMatch = normTaskCwd != normHome && normTaskCwd != "/"
+            let pathCandidates: [(pane: OttyPaneItem, panePathLen: Int, isAncestor: Bool)] = panes.compactMap { item in
+                guard let pCwd = item.cwd, !pCwd.isEmpty else { return nil }
+                let normPane = normalizePath(pCwd)
+                if isPath(normTaskCwd, equalOrInside: normPane) {
+                    return (item, normPane.count, true)
+                }
+                if allowChildMatch && isPath(normPane, equalOrInside: normTaskCwd) {
+                    return (item, normPane.count, false)
+                }
+                return nil
+            }
+
+            let sortedCandidates = pathCandidates.sorted { lhs, rhs in
+                if lhs.isAncestor != rhs.isAncestor {
+                    return lhs.isAncestor && !rhs.isAncestor
+                }
+                if lhs.isAncestor {
+                    return lhs.panePathLen > rhs.panePathLen
+                }
+                return lhs.panePathLen < rhs.panePathLen
+            }
+
+            if let bestWithAgent = sortedCandidates.first(where: { ottyAgentMatches(paneAgent: $0.pane.agent, source: source) }) {
+                return bestWithAgent.pane
+            }
+            if let bestPathOnly = sortedCandidates.first {
+                return bestPathOnly.pane
+            }
+            return nil
+        }
+
+        // 优先级 6: 仅在未提供 cwd 时回退按 Agent 类型匹配
+        if let byAgent = panes.first(where: { ottyAgentMatches(paneAgent: $0.agent, source: source) }) {
+            return byAgent
+        }
+        return nil
+    }
+
     /// 精确定位并聚焦 Otty 的对应 Tab / Pane
-    private static func focusOttyPane(cwd: String?, sessionId: String?, source: String?) -> Bool {
+    private static func focusOttyPane(
+        cwd: String?,
+        sessionId: String?,
+        source: String?,
+        metadata: [String: String]? = nil
+    ) -> Bool {
         let cliPath = "/Applications/Otty.app/Contents/MacOS/otty-cli"
         guard FileManager.default.isExecutableFile(atPath: cliPath) else {
             return false
@@ -241,79 +403,38 @@ public struct TerminalLauncher: Sendable {
         guard proc.terminationStatus == 0 else { return false }
         
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        struct OttyPaneItem: Decodable {
-            let id: String
-            let tab_id: String
-            let window_id: String
-            let cwd: String?
-            let agent: String?
-            let agent_session_id: String?
-        }
-        struct OttyListResponse: Decodable {
-            let data: [OttyPaneItem]
-        }
-        
         guard let list = try? JSONDecoder().decode(OttyListResponse.self, from: data), !list.data.isEmpty else {
             return false
         }
         
-        // 优先级多级匹配
-        var matchedPane: OttyPaneItem? = nil
-        
-        // 优先级 1: Session ID 精确匹配 (Pi / Codex)
-        if let sId = sessionId, !sId.isEmpty {
-            matchedPane = list.data.first(where: { item in
-                guard let pSession = item.agent_session_id, !pSession.isEmpty else { return false }
-                return pSession == sId || pSession.contains(sId) || sId.contains(pSession)
-            })
-        }
-        
-        // 优先级 2: 目录 + Agent 类型匹配
-        if matchedPane == nil, let taskCwd = cwd, !taskCwd.isEmpty {
-            matchedPane = list.data.first(where: { item in
-                guard let pCwd = item.cwd, !pCwd.isEmpty else { return false }
-                let cwdMatch = taskCwd.hasPrefix(pCwd) || pCwd.hasPrefix(taskCwd)
-                if let src = source?.lowercased(), let pAgent = item.agent?.lowercased() {
-                    return cwdMatch && pAgent.contains(src)
-                }
-                return cwdMatch
-            })
-        }
-        
-        // 优先级 3: 单纯工作目录前缀/包含匹配
-        if matchedPane == nil, let taskCwd = cwd, !taskCwd.isEmpty {
-            matchedPane = list.data.first(where: { item in
-                guard let pCwd = item.cwd, !pCwd.isEmpty else { return false }
-                return taskCwd.hasPrefix(pCwd) || pCwd.hasPrefix(taskCwd)
-            })
-        }
-        
-        // 优先级 4: Agent 类型匹配
-        if matchedPane == nil, let src = source?.lowercased() {
-            matchedPane = list.data.first(where: { item in
-                item.agent?.lowercased().contains(src) == true
-            })
-        }
-        
-        guard let targetPane = matchedPane ?? list.data.first else {
+        guard let targetPane = selectBestOttyPane(
+            from: list.data,
+            cwd: cwd,
+            sessionId: sessionId,
+            source: source,
+            metadata: metadata
+        ) else {
             return false
         }
         
-        // 聚焦对应 Pane
-        let focusPaneProc = Process()
-        focusPaneProc.executableURL = URL(fileURLWithPath: cliPath)
-        focusPaneProc.arguments = ["pane", "focus", targetPane.id]
-        try? focusPaneProc.run()
-        focusPaneProc.waitUntilExit()
-        
-        // 聚焦对应 Window
-        let focusWinProc = Process()
-        focusWinProc.executableURL = URL(fileURLWithPath: cliPath)
-        focusWinProc.arguments = ["window", "focus", targetPane.window_id]
-        try? focusWinProc.run()
-        focusWinProc.waitUntilExit()
+        // 先聚焦 Window、Tab，再聚焦对应 Pane，确保切换 Tab 与焦点准确生效
+        if !targetPane.window_id.isEmpty {
+            runOttyCli(cliPath: cliPath, arguments: ["window", "focus", targetPane.window_id])
+        }
+        if !targetPane.tab_id.isEmpty {
+            runOttyCli(cliPath: cliPath, arguments: ["tab", "focus", targetPane.tab_id])
+        }
+        runOttyCli(cliPath: cliPath, arguments: ["pane", "focus", targetPane.id])
         
         return true
+    }
+
+    private static func runOttyCli(cliPath: String, arguments: [String]) {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: cliPath)
+        proc.arguments = arguments
+        try? proc.run()
+        proc.waitUntilExit()
     }
     
     private static func focusAppleTerminalWindow(cwd: String?) -> Bool {

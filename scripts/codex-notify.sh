@@ -105,6 +105,8 @@ if snippet_source:
 default_title = "Codex 执行异常" if norm_status == "error" else ("Codex 任务已中止" if norm_status == "aborted" else "Codex 执行完成")
 final_title = data.get("title") or (f"Codex: {msg_snippet}" if msg_snippet else default_title)
 
+otty_pane_id = "" if "desktop" in originator.lower() else (os.environ.get("OTTY_PANE_ID") or "")
+
 output = {
     "thread_id": thread_id,
     "turn_id": turn_id,
@@ -113,7 +115,8 @@ output = {
     "status": norm_status,
     "error": error if error else None,
     "terminal_app": term_app,
-    "title": final_title
+    "title": final_title,
+    "metadata": {"otty_pane_id": otty_pane_id} if otty_pane_id else None
 }
 
 print(json.dumps(output))

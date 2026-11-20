@@ -205,6 +205,8 @@ if norm_status == "error":
 else:
     final_title = data.get("title") or (f"Claude: {msg_snippet}" if msg_snippet else default_title)
 
+otty_pane_id = os.environ.get("OTTY_PANE_ID") or ""
+
 output = {
     "session_id": session_id,
     "turn_id": turn_id,
@@ -214,7 +216,8 @@ output = {
     "error": error if norm_status == "error" else None,
     "terminal_app": term_app,
     "title": final_title,
-    "hook_event_name": hook_event
+    "hook_event_name": hook_event,
+    "metadata": {"otty_pane_id": otty_pane_id} if otty_pane_id else None
 }
 
 print(json.dumps(output))

@@ -2,6 +2,18 @@
 
 所有重要的项目演进与版本更迭均记录于此。遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 规范。
 
+## [1.0.16] - 2026-11-20
+
+### 修复与优化 (Fixed & Improved)
+- **修复 Otty 终端跳转定位不准、误跳回第一条 Tab 的问题**:
+  - **全链路透传 `OTTY_PANE_ID`**: 更新 `agy-notify.sh`、`claude-notify.sh`、`codex-notify.sh`、`extensions/pi/index.ts`、内置模板与 `agentfloat emit`，自动捕获终端环境变量 `OTTY_PANE_ID` 写入 `metadata.otty_pane_id`，并在 `TerminalLauncher.activate(...)` 调用链传递 `metadata`。
+  - **精确多级 Pane 匹配 (`TerminalLauncher.selectBestOttyPane`)**:
+    - 优先级 0：基于 `OTTY_PANE_ID`（兼容 `p_` 前缀归一化）精确锁定 Pane；
+    - 优先级 1：同时支持从 `agent_session_id` 与 `process`（如 `agy --conversation=<id>`）匹配 Session ID；
+    - 优先级 2–5：严格按路径边界对齐匹配，精确目录匹配优先于祖先目录，祖先目录按最长路径优先，且当任务目录为用户主目录 `~` 或 `/` 时禁止向下匹配任意子目录；
+    - 兼容 `agy` 在 Otty 中显示的 `"Google Antigravity CLI"`；未找到匹配时返回 `nil` 仅置顶窗口，不再兜底跳转到 `list.data.first`。
+  - **多层级聚焦顺序**: `focusOttyPane` 按 `window focus` → `tab focus` → `pane focus` 依次聚焦，确保跨窗口与跨 Tab 切换准确生效。
+
 ## [1.0.15] - 2026-11-20
 
 ### 新增特性 (Added)

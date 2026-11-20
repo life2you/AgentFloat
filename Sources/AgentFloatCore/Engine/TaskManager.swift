@@ -12,6 +12,7 @@ public struct CodexNotificationPayload: Codable, Sendable {
     public var durationMs: Int?
     public var title: String?
     public var terminalApp: String?
+    public var metadata: [String: String]?
     
     enum CodingKeys: String, CodingKey {
         case threadId = "thread_id"
@@ -36,6 +37,7 @@ public struct CodexNotificationPayload: Codable, Sendable {
         case title
         case terminalApp = "terminal_app"
         case terminalAppAlt = "terminalApp"
+        case metadata
     }
     
     public init(
@@ -47,7 +49,8 @@ public struct CodexNotificationPayload: Codable, Sendable {
         error: String? = nil,
         durationMs: Int? = nil,
         title: String? = nil,
-        terminalApp: String? = nil
+        terminalApp: String? = nil,
+        metadata: [String: String]? = nil
     ) {
         self.threadId = threadId
         self.turnId = turnId
@@ -58,6 +61,7 @@ public struct CodexNotificationPayload: Codable, Sendable {
         self.durationMs = durationMs
         self.title = title
         self.terminalApp = terminalApp
+        self.metadata = metadata
     }
     
     public init(from decoder: Decoder) throws {
@@ -87,6 +91,7 @@ public struct CodexNotificationPayload: Codable, Sendable {
         self.title = try container.decodeIfPresent(String.self, forKey: .title)
         self.terminalApp = try container.decodeIfPresent(String.self, forKey: .terminalApp)
             ?? container.decodeIfPresent(String.self, forKey: .terminalAppAlt)
+        self.metadata = try container.decodeIfPresent([String: String].self, forKey: .metadata)
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -99,6 +104,8 @@ public struct CodexNotificationPayload: Codable, Sendable {
         try container.encodeIfPresent(error, forKey: .error)
         try container.encodeIfPresent(durationMs, forKey: .durationMs)
         try container.encodeIfPresent(title, forKey: .title)
+        try container.encodeIfPresent(terminalApp, forKey: .terminalApp)
+        try container.encodeIfPresent(metadata, forKey: .metadata)
     }
 }
 
@@ -117,6 +124,7 @@ public struct ClaudeNotificationPayload: Codable, Sendable {
     public var errorType: String?
     public var errorMessage: String?
     public var transcriptPath: String?
+    public var metadata: [String: String]?
     
     enum CodingKeys: String, CodingKey {
         case sessionId = "session_id"
@@ -150,6 +158,7 @@ public struct ClaudeNotificationPayload: Codable, Sendable {
         
         case transcriptPath = "transcript_path"
         case transcriptPathAlt = "transcriptPath"
+        case metadata
     }
     
     public init(
@@ -165,7 +174,8 @@ public struct ClaudeNotificationPayload: Codable, Sendable {
         hookEventName: String? = nil,
         errorType: String? = nil,
         errorMessage: String? = nil,
-        transcriptPath: String? = nil
+        transcriptPath: String? = nil,
+        metadata: [String: String]? = nil
     ) {
         self.sessionId = sessionId
         self.turnId = turnId
@@ -180,6 +190,7 @@ public struct ClaudeNotificationPayload: Codable, Sendable {
         self.errorType = errorType
         self.errorMessage = errorMessage
         self.transcriptPath = transcriptPath
+        self.metadata = metadata
     }
     
     public init(from decoder: Decoder) throws {
@@ -207,6 +218,7 @@ public struct ClaudeNotificationPayload: Codable, Sendable {
             ?? container.decodeIfPresent(String.self, forKey: .errorMessageAlt)
         self.transcriptPath = try container.decodeIfPresent(String.self, forKey: .transcriptPath)
             ?? container.decodeIfPresent(String.self, forKey: .transcriptPathAlt)
+        self.metadata = try container.decodeIfPresent([String: String].self, forKey: .metadata)
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -224,6 +236,7 @@ public struct ClaudeNotificationPayload: Codable, Sendable {
         try container.encodeIfPresent(errorType, forKey: .errorType)
         try container.encodeIfPresent(errorMessage, forKey: .errorMessage)
         try container.encodeIfPresent(transcriptPath, forKey: .transcriptPath)
+        try container.encodeIfPresent(metadata, forKey: .metadata)
     }
 }
 
@@ -246,6 +259,7 @@ public struct AgyNotificationPayload: Codable, Sendable {
     public var durationMs: Int?
     public var title: String?
     public var terminalApp: String?
+    public var metadata: [String: String]?
 
     enum CodingKeys: String, CodingKey {
         case conversationId = "conversationId"
@@ -295,6 +309,7 @@ public struct AgyNotificationPayload: Codable, Sendable {
         case title
         case terminalApp = "terminalApp"
         case terminalAppSnake = "terminal_app"
+        case metadata
     }
 
     public init(
@@ -314,7 +329,8 @@ public struct AgyNotificationPayload: Codable, Sendable {
         modelName: String? = nil,
         durationMs: Int? = nil,
         title: String? = nil,
-        terminalApp: String? = nil
+        terminalApp: String? = nil,
+        metadata: [String: String]? = nil
     ) {
         self.conversationId = conversationId
         self.turnId = turnId
@@ -333,6 +349,7 @@ public struct AgyNotificationPayload: Codable, Sendable {
         self.durationMs = durationMs
         self.title = title
         self.terminalApp = terminalApp
+        self.metadata = metadata
     }
 
     public init(from decoder: Decoder) throws {
@@ -372,6 +389,7 @@ public struct AgyNotificationPayload: Codable, Sendable {
         self.title = try container.decodeIfPresent(String.self, forKey: .title)
         self.terminalApp = try container.decodeIfPresent(String.self, forKey: .terminalApp)
             ?? container.decodeIfPresent(String.self, forKey: .terminalAppSnake)
+        self.metadata = try container.decodeIfPresent([String: String].self, forKey: .metadata)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -393,6 +411,7 @@ public struct AgyNotificationPayload: Codable, Sendable {
         try container.encodeIfPresent(durationMs, forKey: .durationMs)
         try container.encodeIfPresent(title, forKey: .title)
         try container.encodeIfPresent(terminalApp, forKey: .terminalApp)
+        try container.encodeIfPresent(metadata, forKey: .metadata)
     }
 }
 
@@ -534,6 +553,9 @@ public final class TaskManager: ObservableObject {
         let title = payload.title?.isEmpty == false ? payload.title! : defaultTitle
         let resultSummary = payload.lastAssistantMessage
         
+        var metadata = payload.metadata ?? [:]
+        metadata["codex"] = "true"
+
         return try await ingestTask(
             source: TaskSource.codex.rawValue,
             sessionId: sessionId,
@@ -546,7 +568,7 @@ public final class TaskManager: ObservableObject {
             cwd: cwd,
             terminalApp: payload.terminalApp,
             durationMs: payload.durationMs,
-            metadata: ["codex": "true"]
+            metadata: metadata
         )
     }
     
@@ -591,6 +613,9 @@ public final class TaskManager: ObservableObject {
         let title = payload.title?.isEmpty == false ? payload.title! : defaultTitle
         let resultSummary = payload.lastAssistantMessage
         
+        var metadata = payload.metadata ?? [:]
+        metadata["claude"] = "true"
+
         return try await ingestTask(
             source: TaskSource.claude.rawValue,
             sessionId: sessionId,
@@ -603,7 +628,7 @@ public final class TaskManager: ObservableObject {
             cwd: cwd,
             terminalApp: payload.terminalApp,
             durationMs: payload.durationMs,
-            metadata: ["claude": "true"]
+            metadata: metadata
         )
     }
 
@@ -659,7 +684,8 @@ public final class TaskManager: ObservableObject {
         }()
         let title = payload.title?.isEmpty == false ? payload.title! : defaultTitle
 
-        var metadata: [String: String] = ["agy": "true"]
+        var metadata = payload.metadata ?? [:]
+        metadata["agy"] = "true"
         if let reason = payload.terminationReason, !reason.isEmpty {
             metadata["terminationReason"] = reason
         }

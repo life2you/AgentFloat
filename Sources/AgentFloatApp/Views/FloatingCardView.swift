@@ -587,7 +587,8 @@ private struct NotchDynamicIslandView: View {
                                 cwd: task.cwd,
                                 preferredApp: task.terminalApp,
                                 sessionId: task.sessionId,
-                                source: task.source
+                                source: task.source,
+                                metadata: task.metadata
                             )
                             Task {
                                 try? await taskManager.resolveTask(id: task.id)
@@ -841,7 +842,8 @@ private struct NotchDynamicIslandView: View {
                                 cwd: current.cwd,
                                 preferredApp: current.terminalApp,
                                 sessionId: current.sessionId,
-                                source: current.source
+                                source: current.source,
+                                metadata: current.metadata
                             )
                             Task {
                                 try? await taskManager.resolveTask(id: current.id)
@@ -978,7 +980,8 @@ private struct UltraCompactTaskRow: View {
                             cwd: task.cwd,
                             preferredApp: task.terminalApp,
                             sessionId: task.sessionId,
-                            source: task.source
+                            source: task.source,
+                            metadata: task.metadata
                         )
                         Task {
                             try? await taskManager.resolveTask(id: task.id)

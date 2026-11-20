@@ -260,6 +260,7 @@ export function setupAgentFloatExtension(pi: any) {
       metadata: {
         agent: 'pi',
         event: sourceEvent,
+        ...(process.env.OTTY_PANE_ID ? { otty_pane_id: process.env.OTTY_PANE_ID } : {}),
       },
     };
 

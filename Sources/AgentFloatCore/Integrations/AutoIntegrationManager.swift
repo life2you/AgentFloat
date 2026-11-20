@@ -144,6 +144,8 @@ public struct AutoIntegrationManager: Sendable {
     default_title = "Codex 执行异常" if norm_status == "error" else ("Codex 任务已中止" if norm_status == "aborted" else "Codex 执行完成")
     final_title = data.get("title") or (f"Codex: {msg_snippet}" if msg_snippet else default_title)
 
+    otty_pane_id = "" if "desktop" in originator.lower() else (os.environ.get("OTTY_PANE_ID") or "")
+
     output = {
         "thread_id": thread_id,
         "turn_id": turn_id,
@@ -152,7 +154,8 @@ public struct AutoIntegrationManager: Sendable {
         "status": norm_status,
         "error": error if error else None,
         "terminal_app": term_app,
-        "title": final_title
+        "title": final_title,
+        "metadata": {"otty_pane_id": otty_pane_id} if otty_pane_id else None
     }
 
     print(json.dumps(output))
@@ -382,6 +385,8 @@ public struct AutoIntegrationManager: Sendable {
     else:
         final_title = data.get("title") or (f"Claude: {msg_snippet}" if msg_snippet else default_title)
 
+    otty_pane_id = os.environ.get("OTTY_PANE_ID") or ""
+
     output = {
         "session_id": session_id,
         "turn_id": turn_id,
@@ -391,7 +396,8 @@ public struct AutoIntegrationManager: Sendable {
         "error": error if norm_status == "error" else None,
         "terminal_app": term_app,
         "title": final_title,
-        "hook_event_name": hook_event
+        "hook_event_name": hook_event,
+        "metadata": {"otty_pane_id": otty_pane_id} if otty_pane_id else None
     }
 
     print(json.dumps(output))
@@ -593,6 +599,8 @@ public struct AutoIntegrationManager: Sendable {
     else:
         final_title = data.get("title") or (f"Antigravity: {msg_snippet}" if msg_snippet else default_title)
 
+    otty_pane_id = "" if term_app == "antigravity" else (os.environ.get("OTTY_PANE_ID") or "")
+
     output = {
         "conversationId": conversation_id,
         "turnId": turn_id,
@@ -608,7 +616,8 @@ public struct AutoIntegrationManager: Sendable {
         "transcriptPath": transcript_path if transcript_path else None,
         "modelName": model_name if model_name else None,
         "terminalApp": term_app,
-        "title": final_title
+        "title": final_title,
+        "metadata": {"otty_pane_id": otty_pane_id} if otty_pane_id else None
     }
 
     print(json.dumps({k: v for k, v in output.items() if v is not None}, ensure_ascii=False))
@@ -879,7 +888,11 @@ public struct AutoIntegrationManager: Sendable {
           cwd,
           terminalApp: ctx?.terminalApp || process.env.TERM_PROGRAM || undefined,
           durationMs,
-          metadata: { agent: 'pi', event: sourceEvent },
+          metadata: {
+            agent: 'pi',
+            event: sourceEvent,
+            ...(process.env.OTTY_PANE_ID ? { otty_pane_id: process.env.OTTY_PANE_ID } : {}),
+          },
         };
 
         await sendToAgentFloat(payload, serverUrl);

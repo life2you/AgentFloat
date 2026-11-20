@@ -181,6 +181,8 @@ if norm_status == "error":
 else:
     final_title = data.get("title") or (f"Antigravity: {msg_snippet}" if msg_snippet else default_title)
 
+otty_pane_id = "" if term_app == "antigravity" else (os.environ.get("OTTY_PANE_ID") or "")
+
 output = {
     "conversationId": conversation_id,
     "turnId": turn_id,
@@ -196,7 +198,8 @@ output = {
     "transcriptPath": transcript_path if transcript_path else None,
     "modelName": model_name if model_name else None,
     "terminalApp": term_app,
-    "title": final_title
+    "title": final_title,
+    "metadata": {"otty_pane_id": otty_pane_id} if otty_pane_id else None
 }
 
 print(json.dumps({k: v for k, v in output.items() if v is not None}, ensure_ascii=False))

@@ -200,6 +200,9 @@ struct AgentFloatCLI {
             i += 1
         }
         
+        let paneId = ProcessInfo.processInfo.environment["OTTY_PANE_ID"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let emitMetadata: [String: String]? = (paneId?.isEmpty == false) ? ["otty_pane_id": paneId!] : nil
+
         let payload = GenericEventPayload(
             source: source,
             sessionId: sessionId,
@@ -210,7 +213,8 @@ struct AgentFloatCLI {
             status: status,
             errorMessage: errorMessage,
             cwd: cwd,
-            terminalApp: terminalApp
+            terminalApp: terminalApp,
+            metadata: emitMetadata
         )
         
         guard let body = try? JSONEncoder().encode(payload) else {

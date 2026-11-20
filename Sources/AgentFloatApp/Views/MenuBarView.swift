@@ -221,7 +221,8 @@ public struct MenuBarView: View {
                         cwd: task.cwd,
                         preferredApp: task.terminalApp,
                         sessionId: task.sessionId,
-                        source: task.source
+                        source: task.source,
+                        metadata: task.metadata
                     )
                     Task {
                         try? await taskManager.resolveTask(id: task.id)
