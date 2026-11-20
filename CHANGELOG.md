@@ -2,6 +2,16 @@
 
 所有重要的项目演进与版本更迭均记录于此。遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 规范。
 
+## [1.0.15] - 2026-11-20
+
+### 新增特性 (Added)
+- **Antigravity (`agy` CLI / 桌面端 / IDE) 全链路原生支持与零配置自动挂载**:
+  - **核心模型与 HTTP 端点**: `TaskSource` 新增 `.agy`（显示名：`Antigravity`，兼容 `antigravity` 别名）；`TaskManager` 新增 `AgyNotificationPayload` 与 `ingestAgyNotification(payload:)`；`LocalHttpServer` 新增 `POST /api/agy/notify`。
+  - **零配置自动 Hook 挂载 (`AutoIntegrationManager.setupAgy`)**: 自动检测 `~/.gemini/`、`Antigravity.app` 与 `agy` CLI，部署 `~/.agentfloat/hooks/agy-notify.sh`，并在 `~/.gemini/config/hooks.json` 自动合并注入 `agentfloat.Stop` 生命周期钩子（保留用户现有钩子并自动备份 `hooks.json.bak`）。
+  - **精准状态与 Transcript 解析 (`scripts/agy-notify.sh`)**: 精准识别 `NO_TOOL_CALL`、`ERROR`、`USER_CANCELED`、`MAX_INVOCATIONS` / `MAX_FORCED_INVOCATIONS` / `MAX_TOKEN_BUDGET_EXCEEDED` 等 `terminationReason`，自动读取 `transcriptPath` 提取最新回复摘要与步骤异常，并按 Antigravity Hook 契约向 `stdout` 输出 `{}`。
+  - **终端与桌面端智能跳转 (`TerminalLauncher`)**: 新增 `SupportedTerminal.antigravity`（`com.google.antigravity`），来自 `agy` CLI 时优先回跳原终端（如 Otty / Ghostty / iTerm2），来自 Antigravity 桌面端或未指定终端时一键置顶 `Antigravity.app`。
+  - **CLI 与 UI 同步适配**: `AgentFloatCLI` 新增 `agentfloat agy-notify` 子命令并更新 `setup` 与帮助文案；悬浮卡片为 `.agy` 配备 `atom` 徽标图标。
+
 ## [1.0.14] - 2026-11-17
 
 ### 修复与优化 (Fixed & Improved)
