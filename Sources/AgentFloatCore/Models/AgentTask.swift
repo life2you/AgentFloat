@@ -6,6 +6,7 @@ public enum TaskSource: String, Codable, Sendable, CaseIterable {
     case codex = "codex"
     case claude = "claude"
     case dsh = "dsh"
+    case agy = "agy"
     case custom = "custom"
     
     public var displayName: String {
@@ -14,6 +15,7 @@ public enum TaskSource: String, Codable, Sendable, CaseIterable {
         case .codex: return "Codex"
         case .claude: return "Claude"
         case .dsh: return "DeepSeek Harness"
+        case .agy: return "Antigravity"
         case .custom: return "Custom"
         }
     }
@@ -111,7 +113,11 @@ public struct AgentTask: Identifiable, Codable, Sendable, Equatable {
     
     /// 解析 source 枚举
     public var typedSource: TaskSource {
-        TaskSource(rawValue: source.lowercased()) ?? .custom
+        let lower = source.lowercased()
+        if lower == "antigravity" {
+            return .agy
+        }
+        return TaskSource(rawValue: lower) ?? .custom
     }
     
     /// 核心警告文案：严禁将任务结束等同于代码验证通过

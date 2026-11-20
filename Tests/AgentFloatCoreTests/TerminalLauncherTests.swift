@@ -19,6 +19,8 @@ struct TerminalLauncherTests {
         #expect(SupportedTerminal.from(identifier: "chatgpt") == .codex)
         #expect(SupportedTerminal.from(identifier: "dsh") == .dsh)
         #expect(SupportedTerminal.from(identifier: "deepseek") == .dsh)
+        #expect(SupportedTerminal.from(identifier: "agy") == .antigravity)
+        #expect(SupportedTerminal.from(identifier: "antigravity") == .antigravity)
         #expect(SupportedTerminal.from(identifier: "terminal") == .terminal)
         #expect(SupportedTerminal.from(identifier: "apple") == .terminal)
         #expect(SupportedTerminal.from(identifier: "unknown_shell") == nil)
@@ -32,6 +34,7 @@ struct TerminalLauncherTests {
         #expect(SupportedTerminal.iterm2.rawValue == "com.googlecode.iterm2")
         #expect(SupportedTerminal.codex.rawValue == "com.openai.codex")
         #expect(SupportedTerminal.dsh.rawValue == "com.deepseek.dsh")
+        #expect(SupportedTerminal.antigravity.rawValue == "com.google.antigravity")
     }
     
     @Test("当前活跃终端识别")
@@ -49,6 +52,10 @@ struct TerminalLauncherTests {
         #expect(SupportedTerminal.dsh.actionTitle == "应用")
         #expect(SupportedTerminal.dsh.actionIconName == "macwindow")
         #expect(!SupportedTerminal.dsh.isTerminal)
+        
+        #expect(SupportedTerminal.antigravity.actionTitle == "应用")
+        #expect(SupportedTerminal.antigravity.actionIconName == "macwindow")
+        #expect(!SupportedTerminal.antigravity.isTerminal)
         
         #expect(SupportedTerminal.ghostty.actionTitle == "终端")
         #expect(SupportedTerminal.ghostty.actionIconName == "terminal")

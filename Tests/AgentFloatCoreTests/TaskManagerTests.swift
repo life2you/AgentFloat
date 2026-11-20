@@ -414,4 +414,155 @@ print(json.dumps(output))
         #expect(codexErrTask.title == "Codex 执行异常")
         #expect(codexErrTask.verificationNotice == "任务异常 · 请检查错误日志")
     }
+
+    @Test("Antigravity (agy) 通知解析、terminationReason 判定与去重")
+    @MainActor
+    func agyNotificationIngestion() async throws {
+        let (manager, path) = try createManager()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+
+        // 1. 正常完成 (NO_TOOL_CALL)
+        let okPayload = AgyNotificationPayload(
+            conversationId: "agy-conv-100",
+            turnId: "turn-1",
+            executionNum: 0,
+            workspacePaths: ["/Users/dev/AgentFloat"],
+            lastAssistantMessage: "已完成新功能接入并通过全部测试。",
+            lastUserInput: "增加对 agy 的支持",
+            terminationReason: "NO_TOOL_CALL",
+            hookEventName: "Stop",
+            modelName: "gemini-pro",
+            terminalApp: "ghostty"
+        )
+        let okTask = try await manager.ingestAgyNotification(payload: okPayload)
+        #expect(okTask.source == "agy")
+        #expect(okTask.typedSource == .agy)
+        #expect(okTask.typedSource.displayName == "Antigravity")
+        #expect(okTask.sessionId == "agy-conv-100")
+        #expect(okTask.cwd == "/Users/dev/AgentFloat")
+        #expect(okTask.promptSummary == "增加对 agy 的支持")
+        #expect(okTask.status == .completed)
+        #expect(okTask.terminalApp == "ghostty")
+        #expect(okTask.verificationNotice == "任务结束 · 请人工验证代码")
+
+        // 2. 错误终止 (ERROR)
+        let errPayload = AgyNotificationPayload(
+            conversationId: "agy-conv-101",
+            turnId: "turn-2",
+            cwd: "/Users/dev/AgentFloat",
+            error: "API quota exhausted",
+            terminationReason: "ERROR",
+            hookEventName: "Stop"
+        )
+        let errTask = try await manager.ingestAgyNotification(payload: errPayload)
+        #expect(errTask.status == .error)
+        #expect(errTask.errorMessage == "API quota exhausted")
+        #expect(errTask.title == "Antigravity 执行异常")
+        #expect(errTask.verificationNotice == "任务异常 · 请检查错误日志")
+
+        // 3. 用户取消 (USER_CANCELED)
+        let cancelPayload = AgyNotificationPayload(
+            conversationId: "agy-conv-102",
+            turnId: "turn-3",
+            terminationReason: "USER_CANCELED",
+            hookEventName: "Stop"
+        )
+        let cancelTask = try await manager.ingestAgyNotification(payload: cancelPayload)
+        #expect(cancelTask.status == .aborted)
+        #expect(cancelTask.title == "Antigravity 任务已中止")
+        #expect(cancelTask.verificationNotice == "任务已中止 · 请检查当前状态")
+
+        // 4. 达到上限 (MAX_INVOCATIONS)
+        let limitPayload = AgyNotificationPayload(
+            conversationId: "agy-conv-103",
+            turnId: "turn-4",
+            terminationReason: "MAX_INVOCATIONS",
+            hookEventName: "Stop"
+        )
+        let limitTask = try await manager.ingestAgyNotification(payload: limitPayload)
+        #expect(limitTask.status == .error)
+        #expect(limitTask.errorMessage?.contains("MAX_INVOCATIONS") == true)
+
+        // 5. antigravity 别名兼容
+        let aliasTask = AgentTask(source: "antigravity", title: "Alias Check")
+        #expect(aliasTask.typedSource == .agy)
+    }
+
+    @Test("Antigravity (agy) 自动配置与 scripts/agy-notify.sh 契约测试")
+    func agyAutoSetupAndHookScript() throws {
+        let tempHome = FileManager.default.temporaryDirectory
+            .appendingPathComponent("agentfloat_agy_test_\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(atPath: tempHome.path) }
+
+        let cliDir = tempHome.appendingPathComponent(".gemini/antigravity-cli", isDirectory: true)
+        let configDir = tempHome.appendingPathComponent(".gemini/config", isDirectory: true)
+        try FileManager.default.createDirectory(at: cliDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
+
+        // 预先写入用户自定义 Hook，验证不会覆盖已有配置
+        let existingHooks: [String: Any] = [
+            "lint-checker": [
+                "PostToolUse": [
+                    ["matcher": "run_command", "hooks": [["type": "command", "command": "./lint.sh"]]]
+                ]
+            ]
+        ]
+        let existingData = try JSONSerialization.data(withJSONObject: existingHooks, options: [.prettyPrinted])
+        let hooksFile = configDir.appendingPathComponent("hooks.json")
+        try existingData.write(to: hooksFile)
+
+        let (ok, _) = AutoIntegrationManager.setupAgy(homeDirectory: tempHome, checkSystemApps: false)
+        #expect(ok)
+
+        let updatedData = try Data(contentsOf: hooksFile)
+        let updatedJson = try JSONSerialization.jsonObject(with: updatedData) as? [String: Any]
+        #expect(updatedJson?["lint-checker"] != nil)
+
+        let agentfloatHook = updatedJson?["agentfloat"] as? [String: Any]
+        let stopHandlers = agentfloatHook?["Stop"] as? [[String: Any]]
+        #expect(stopHandlers?.count == 1)
+        let expectedCmd = tempHome.appendingPathComponent(".agentfloat/hooks/agy-notify.sh").path
+        #expect(stopHandlers?.first?["command"] as? String == expectedCmd)
+        #expect(FileManager.default.isExecutableFile(atPath: expectedCmd))
+
+        // 验证重复调用幂等性
+        let (okAgain, msgAgain) = AutoIntegrationManager.setupAgy(homeDirectory: tempHome, checkSystemApps: false)
+        #expect(okAgain)
+        #expect(msgAgain.contains("已就绪"))
+
+        // 验证脚本本身在无服务端时也能向 stdout 输出有效 JSON 对象 {}
+        let scriptPath = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("scripts/agy-notify.sh").path
+        #expect(FileManager.default.fileExists(atPath: scriptPath))
+
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        proc.arguments = ["bash", scriptPath]
+        var env = ProcessInfo.processInfo.environment
+        env["HOME"] = tempHome.path
+        env["AGENTFLOAT_TOKEN"] = "dummy-token"
+        env["AGENTFLOAT_URL"] = "http://127.0.0.1:49999"
+        proc.environment = env
+
+        let stdinPipe = Pipe()
+        let stdoutPipe = Pipe()
+        proc.standardInput = stdinPipe
+        proc.standardOutput = stdoutPipe
+        try proc.run()
+
+        let sampleInput = """
+        {"conversationId":"conv-test","workspacePaths":["/tmp/ws"],"hookEventName":"Stop","terminationReason":"NO_TOOL_CALL","lastUserInput":"test agy"}
+        """
+        stdinPipe.fileHandleForWriting.write(Data(sampleInput.utf8))
+        stdinPipe.fileHandleForWriting.closeFile()
+        proc.waitUntilExit()
+
+        #expect(proc.terminationStatus == 0)
+        let outData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+        let outStr = String(data: outData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        #expect(outStr == "{}")
+    }
 }

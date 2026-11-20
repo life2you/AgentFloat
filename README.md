@@ -44,7 +44,7 @@
 - 🗄 **高并发安全存储 (`SQLiteTaskStore`)**：
   原生 SQLite3 C API actor 封装，启用 WAL 模式与唯一去重索引 `(source, session_id, turn_id)`，天然防御 Webhook 重复推送或重试产生的通知风暴。
 - 🧩 **全生态接入与零配置直连**：
-  开箱即用！应用启动时自动检测本机安装的 **Codex (CLI & 桌面版)**、**Pi Agent**、**Claude Code (CLI)** 与 **DeepSeek Harness (dsh 桌面版)**，并在后台全自动完成通知挂载与插件安装，用户无需手动查找路径或编辑任何配置文件。
+  开箱即用！应用启动时自动检测本机安装的 **Codex (CLI & 桌面版)**、**Pi Agent**、**Claude Code (CLI)**、**DeepSeek Harness (dsh 桌面版)** 与 **Antigravity (agy CLI & 桌面端)**，并在后台全自动完成通知挂载与插件安装，用户无需手动查找路径或编辑任何配置文件。
 
 ---
 
@@ -72,7 +72,8 @@ AgentFloat
 ├── extensions/pi/                      # Pi Agent 官方扩展
 ├── extensions/dsh/                     # DeepSeek Harness (dsh) 桌面插件
 ├── scripts/codex-notify.sh             # Codex CLI 通知适配脚本
-└── scripts/claude-notify.sh            # Claude Code (CLI) 通知适配脚本
+├── scripts/claude-notify.sh            # Claude Code (CLI) 通知适配脚本
+└── scripts/agy-notify.sh               # Antigravity (agy) Stop Hook 通知脚本
 ```
 
 ---
@@ -175,8 +176,13 @@ agentfloat health
 - 自动通过 `dsh plugin --profile desktop add` 无感配置桌面 profile 环境；检测桌面运行状态，若桌面在运行则提示完全退出桌面端后再重新检测，以避免 profile 写锁冲突。
 - 支持卡片一键通过 `dsh://open` 深链接精准跳转并置顶 `DeepSeek Harness.app`。
 
-### 5. 一键检测与修复
-若后续新安装了 Codex、Pi、Claude 或 DeepSeek Harness，可在系统菜单栏点击 **「重新检测」**，或在终端随时运行：
+### 5. Antigravity (agy CLI / 桌面端 / IDE) 自动联动
+- 启动应用时自动在 `~/.agentfloat/hooks/agy-notify.sh` 部署自包含 Hook，并自动在 `~/.gemini/config/hooks.json` 注入 `agentfloat.Stop` 生命周期钩子。
+- 精准识别 `NO_TOOL_CALL`、`ERROR`、`USER_CANCELED`、`MAX_INVOCATIONS` 等 `terminationReason`，自动解析 `transcriptPath` 与 `lastUserInput`。
+- 支持智能判断来源：来自 `agy` CLI 时自动回跳原终端（如 Ghostty / Otty / iTerm2），来自 `Antigravity.app` (`com.google.antigravity`) 时一键置顶桌面应用。
+
+### 6. 一键检测与修复
+若后续新安装了 Codex、Pi、Claude、DeepSeek Harness 或 Antigravity，可在系统菜单栏点击 **「重新检测」**，或在终端随时运行：
 ```bash
 agentfloat setup
 ```
@@ -194,6 +200,7 @@ agentfloat setup
 | `POST` | `/api/events` | 发送通用任务事件 |
 | `POST` | `/api/codex/notify` | Codex CLI 专用通知接收 |
 | `POST` | `/api/claude/notify` | Claude CLI 专用通知接收 |
+| `POST` | `/api/agy/notify` | Antigravity (agy) Stop Hook 专用通知接收 |
 | `POST` | `/api/test/emit` | 发送测试模拟卡片 |
 | `GET` | `/api/tasks` | 获取任务列表（支持 `?filter=pending` 或 `?filter=all`） |
 | `POST` | `/api/tasks/{id}/resolve` | 标记任务为已处理 |

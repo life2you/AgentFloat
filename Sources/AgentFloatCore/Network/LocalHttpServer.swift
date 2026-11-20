@@ -401,6 +401,19 @@ public final class LocalHttpServer: @unchecked Sendable {
             return
         }
         
+        // POST /api/agy/notify
+        if method == "POST" && path == "/api/agy/notify" {
+            do {
+                let payload = try decoder.decode(AgyNotificationPayload.self, from: body)
+                let task = try await taskManager.ingestAgyNotification(payload: payload)
+                let resData = try JSONEncoder().encode(["status": "ok", "taskId": task.id])
+                sendResponse(connection: connection, status: 200, statusText: "OK", bodyData: resData)
+            } catch {
+                sendError(connection: connection, status: 400, message: "Invalid agy payload: \(error.localizedDescription)")
+            }
+            return
+        }
+        
         // POST /api/test/emit
         if method == "POST" && path == "/api/test/emit" {
             do {

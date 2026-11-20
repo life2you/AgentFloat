@@ -175,8 +175,13 @@ agentfloat health
 - Automatically executes `dsh plugin --profile desktop add` to integrate with the desktop profile; safely checks for running desktop processes and warns if the app is active to avoid profile write-lock conflicts.
 - Supports one-click activation and window focus for `DeepSeek Harness.app` via `dsh://open` deep link.
 
-### 5. One-Click Verification & Repair
-If you install Codex, Pi, Claude, or DeepSeek Harness later, click **"Re-detect"** in the macOS menu bar popover, or run anytime in terminal:
+### 5. Antigravity (agy CLI / Desktop / IDE) Automatic Integration
+- Automatically deploys the notification hook to `~/.agentfloat/hooks/agy-notify.sh` and merges the `agentfloat.Stop` lifecycle hook into `~/.gemini/config/hooks.json`.
+- Recognizes `terminationReason` (`NO_TOOL_CALL`, `ERROR`, `USER_CANCELED`, `MAX_INVOCATIONS`, etc.) and inspects `transcriptPath` / `lastUserInput`.
+- Automatically brings back the originating terminal for `agy` CLI or focuses `Antigravity.app` (`com.google.antigravity`) for desktop sessions.
+
+### 6. One-Click Verification & Repair
+If you install Codex, Pi, Claude, DeepSeek Harness, or Antigravity later, click **"Re-detect"** in the macOS menu bar popover, or run anytime in terminal:
 ```bash
 agentfloat setup
 ```
@@ -194,6 +199,7 @@ The local server listens on `http://127.0.0.1:41920`. Endpoints require the auth
 | `POST` | `/api/events` | Ingest generic agent event |
 | `POST` | `/api/codex/notify` | Ingest Codex CLI notification payload |
 | `POST` | `/api/claude/notify` | Ingest Claude CLI notification payload |
+| `POST` | `/api/agy/notify` | Ingest Antigravity (`agy`) Stop Hook payload |
 | `POST` | `/api/test/emit` | Emit simulated HUD test card |
 | `GET` | `/api/tasks` | List tasks (`?filter=pending` or `?filter=all`) |
 | `POST` | `/api/tasks/{id}/resolve` | Mark task as resolved |

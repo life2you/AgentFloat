@@ -21,7 +21,7 @@ struct AgentFloatCLI {
         命令:
           version, -v, --version 显示当前版本号
           emit               发送任务事件
-            --source <name>    来源 (pi / codex / claude / dsh / custom, 默认 custom)
+            --source <name>    来源 (pi / codex / claude / dsh / agy / custom, 默认 custom)
             --status <status>  状态 (completed / error / aborted, 默认 completed)
             --title <title>    任务标题
             --cwd <path>       工作目录 (默认当前目录)
@@ -30,10 +30,11 @@ struct AgentFloatCLI {
             --error <text>     错误信息
             --session <id>     Session ID
             --turn <id>        Turn ID
-            --terminal <app>   终端应用 (otty / ghostty / terminal / iterm2)
+            --terminal <app>   终端应用 (otty / ghostty / terminal / iterm2 / antigravity)
 
           codex-notify [json] 处理 Codex CLI notify 通知 (支持参数或 stdin)
           claude-notify [json] 处理 Claude CLI notify 通知 (支持参数或 stdin)
+          agy-notify [json]  处理 Antigravity (agy) Stop Hook 通知 (支持参数或 stdin)
           test               发送模拟测试卡片
             --success          模拟成功任务 (绿色)
             --error            模拟报错任务 (红色)
@@ -44,7 +45,7 @@ struct AgentFloatCLI {
             --pending          仅显示未处理任务 (默认)
 
           resolve <id>       标记指定任务为已处理
-          setup              一键自动检测并配置本地 Codex、Pi Agent、Claude CLI 与 DeepSeek Harness 联动
+          setup              一键自动检测并配置本地 Codex、Pi Agent、Claude CLI、DeepSeek Harness 与 Antigravity (agy) 联动
           autostart [on/off] 查看或设置开机自启动
           token              查看当前本地鉴权 Token
           health             检测 AgentFloat 服务健康状态
@@ -342,6 +343,52 @@ struct AgentFloatCLI {
         }
     }
 
+    static func handleAgyNotify(args: [String]) async {
+        var rawJson: String? = nil
+
+        if let firstArg = args.first, !firstArg.isEmpty {
+            rawJson = firstArg
+        } else {
+            let stdinData = FileHandle.standardInput.readDataToEndOfFile()
+            if !stdinData.isEmpty {
+                rawJson = String(data: stdinData, encoding: .utf8)
+            }
+        }
+
+        guard let jsonStr = rawJson?.trimmingCharacters(in: .whitespacesAndNewlines), !jsonStr.isEmpty else {
+            print("❌ 未提供 Antigravity (agy) notification JSON 数据。")
+            print("用法: agentfloat agy-notify '<json>' 或管道输入")
+            return
+        }
+
+        guard let data = jsonStr.data(using: .utf8) else {
+            print("❌ JSON 编码解析失败")
+            return
+        }
+
+        do {
+            let (code, respData) = try await sendHttpRequest(endpoint: "/api/agy/notify", method: "POST", body: data)
+            if code == 200 {
+                print("✅ Antigravity 通知已成功推送")
+            } else {
+                let msg = String(data: respData, encoding: .utf8) ?? ""
+                print("❌ 推送失败 HTTP \(code): \(msg)")
+            }
+        } catch {
+            print("⚠️ 本地服务未运行，正在直接解析写入数据库...")
+            do {
+                let decoder = JSONDecoder()
+                let payload = try decoder.decode(AgyNotificationPayload.self, from: data)
+                let store = try SQLiteTaskStore()
+                let manager = await TaskManager(store: store)
+                let task = try await manager.ingestAgyNotification(payload: payload)
+                print("✅ Antigravity 任务已记录: \(task.title) (ID: \(task.id))")
+            } catch {
+                print("❌ 直写处理失败: \(error)")
+            }
+        }
+    }
+
     static func handleList(args: [String]) async {
         let showAll = args.contains("--all")
         let filter = showAll ? "all" : "pending"
@@ -429,10 +476,10 @@ struct AgentFloatCLI {
             print("  • \(msg)")
         }
         print("")
-        if status.codexConfigured || status.piConfigured || status.claudeConfigured || status.dshConfigured {
-            print("✨ 配置完成！已检测到的 Agent（Codex / Pi / Claude / DeepSeek Harness）轮次结束时将自动向 AgentFloat 悬浮窗上报任务。")
+        if status.codexConfigured || status.piConfigured || status.claudeConfigured || status.dshConfigured || status.agyConfigured {
+            print("✨ 配置完成！已检测到的 Agent（Codex / Pi / Claude / DeepSeek Harness / Antigravity）轮次结束时将自动向 AgentFloat 悬浮窗上报任务。")
         } else {
-            print("💡 未检测到本地已安装的 Codex (~/.codex)、Pi Agent (~/.pi/agent)、Claude CLI (~/.claude) 或 DeepSeek Harness (~/.dsh)。后续安装后启动 AgentFloat 即可自动连接。")
+            print("💡 未检测到本地已安装的 Codex (~/.codex)、Pi Agent (~/.pi/agent)、Claude CLI (~/.claude)、DeepSeek Harness (~/.dsh) 或 Antigravity (~/.gemini)。后续安装后启动 AgentFloat 即可自动连接。")
         }
     }
 
@@ -474,6 +521,8 @@ struct AgentFloatCLI {
             await handleCodexNotify(args: subArgs)
         case "claude-notify":
             await handleClaudeNotify(args: subArgs)
+        case "agy-notify":
+            await handleAgyNotify(args: subArgs)
         case "test":
             await handleTest(args: subArgs)
         case "list":

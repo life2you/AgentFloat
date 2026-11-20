@@ -106,6 +106,25 @@ struct LocalHttpServerTests {
         #expect((claudeResp as? HTTPURLResponse)?.statusCode == 200)
         let claudeJson = try JSONSerialization.jsonObject(with: claudeData) as? [String: Any]
         #expect(claudeJson?["taskId"] != nil)
+
+        // 6.1 Antigravity (agy) 通知接口测试 POST /api/agy/notify
+        let agyUrl = URL(string: "http://127.0.0.1:\(testPort)/api/agy/notify")!
+        var agyReq = URLRequest(url: agyUrl)
+        agyReq.httpMethod = "POST"
+        agyReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        agyReq.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        agyReq.httpBody = "{\"conversationId\":\"agy-conv-1\",\"turnId\":\"agy-turn-1\",\"terminationReason\":\"NO_TOOL_CALL\",\"cwd\":\"/tmp/agy\"}".data(using: .utf8)
+        let (agyData, agyResp) = try await URLSession.shared.data(for: agyReq)
+        #expect((agyResp as? HTTPURLResponse)?.statusCode == 200)
+        let agyJson = try JSONSerialization.jsonObject(with: agyData) as? [String: Any]
+        if let agyTaskId = agyJson?["taskId"] as? String {
+            let savedAgyTask = try await store.getTask(id: agyTaskId)
+            #expect(savedAgyTask?.source == "agy")
+            #expect(savedAgyTask?.typedSource == .agy)
+            #expect(savedAgyTask?.status == .completed)
+        } else {
+            Issue.record("Missing taskId in /api/agy/notify response")
+        }
         
         // 7. 通用事件接口错误状态识别 POST /api/events (status=failed 或带 errorMessage)
         var errEventReq = URLRequest(url: eventsUrl)

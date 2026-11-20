@@ -314,6 +314,7 @@ private struct AgentEmblemOrb: View {
         case .codex: return "cpu.fill"
         case .claude: return "brain.head.profile"
         case .dsh: return "bolt.horizontal.circle.fill"
+        case .agy: return "atom"
         case .custom: return "terminal.fill"
         }
     }

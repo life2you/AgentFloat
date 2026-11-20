@@ -13,6 +13,7 @@ public enum SupportedTerminal: String, CaseIterable, Sendable {
     case cursor = "com.todesktop.230313mzl4w4u92"
     case codex = "com.openai.codex"
     case dsh = "com.deepseek.dsh"
+    case antigravity = "com.google.antigravity"
     
     public var displayName: String {
         switch self {
@@ -27,13 +28,14 @@ public enum SupportedTerminal: String, CaseIterable, Sendable {
         case .cursor: return "Cursor"
         case .codex: return "Codex"
         case .dsh: return "DeepSeek Harness"
+        case .antigravity: return "Antigravity"
         }
     }
 
     /// 是否为传统终端仿真器
     public var isTerminal: Bool {
         switch self {
-        case .codex, .dsh:
+        case .codex, .dsh, .antigravity:
             return false
         default:
             return true
@@ -43,7 +45,7 @@ public enum SupportedTerminal: String, CaseIterable, Sendable {
     /// 悬浮卡片与菜单栏中的跳转按钮文案
     public var actionTitle: String {
         switch self {
-        case .codex, .dsh:
+        case .codex, .dsh, .antigravity:
             return "应用"
         default:
             return "终端"
@@ -53,7 +55,7 @@ public enum SupportedTerminal: String, CaseIterable, Sendable {
     /// 按钮对应图标
     public var actionIconName: String {
         switch self {
-        case .codex, .dsh:
+        case .codex, .dsh, .antigravity:
             return "macwindow"
         default:
             return "terminal"
@@ -67,6 +69,8 @@ public enum SupportedTerminal: String, CaseIterable, Sendable {
             return "跳转至 Codex 桌面应用"
         case .dsh:
             return "跳转至 DeepSeek Harness 桌面应用"
+        case .antigravity:
+            return "跳转至 Antigravity 桌面应用"
         default:
             return "激活当前终端窗口"
         }
@@ -86,6 +90,7 @@ public enum SupportedTerminal: String, CaseIterable, Sendable {
         if id.contains("vscode") || id == "code" { return .vscode }
         if id.contains("codex") || id.contains("chatgpt") || id.contains("openai") { return .codex }
         if id.contains("deepseek") || id.contains("dsh") { return .dsh }
+        if id.contains("antigravity") || id == "agy" { return .antigravity }
         if id.contains("terminal") || id.contains("apple") { return .terminal }
         return nil
     }
@@ -113,6 +118,13 @@ public struct TerminalLauncher: Sendable {
         if source == "dsh" && (preferred == nil || preferred?.isEmpty == true || preferred?.contains("dsh") == true || preferred?.contains("deepseek") == true) {
             if runningBundles.contains(SupportedTerminal.dsh.rawValue) || isInstalled(terminal: .dsh) {
                 return .dsh
+            }
+        }
+        
+        // 若来源是 agy 且未明确指定终端：优先置顶 Antigravity 桌面应用
+        if (source == "agy" || source == "antigravity") && (preferred == nil || preferred?.isEmpty == true || preferred?.lowercased().contains("agy") == true || preferred?.lowercased().contains("antigravity") == true) {
+            if runningBundles.contains(SupportedTerminal.antigravity.rawValue) || isInstalled(terminal: .antigravity) {
+                return .antigravity
             }
         }
         
@@ -176,6 +188,11 @@ public struct TerminalLauncher: Sendable {
                 config.activates = true
                 NSWorkspace.shared.open(url, configuration: config, completionHandler: nil)
             }
+            return bringToFront(bundleId: bundleId)
+        }
+        
+        // 0.2 如果目标是 Antigravity 桌面端，置顶应用窗口
+        if target == .antigravity {
             return bringToFront(bundleId: bundleId)
         }
         
